@@ -1,0 +1,14 @@
+allowBuilds:
+  '@clerk/shared': true
+  '@firebase/util': true
+  esbuild: true
+  msw: true
+  protobufjs: true
+  sharp: true
+onlyBuiltDependencies:
+  - sharp
+  - '@clerk/shared'
+  - '@firebase/util'
+  - protobufjs
+  - esbuild
+  - msw
