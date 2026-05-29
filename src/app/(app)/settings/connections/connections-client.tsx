@@ -42,6 +42,18 @@ const PLATFORMS: Platform[] = [
   },
 ];
 
+const ERROR_MESSAGES: Record<string, string> = {
+  oauth_failed:           "Connexion échouée, réessaie.",
+  session_expired:        "Session expirée, réessaie.",
+  session_corrupted:      "Session invalide, réessaie.",
+  state_mismatch:         "Vérification de sécurité échouée, réessaie.",
+  missing_code_or_state:  "Réponse OAuth incomplète, réessaie.",
+  missing_code_verifier:  "Erreur interne PKCE, réessaie.",
+  token_exchange_failed:  "Échange de token échoué — vérifie tes credentials dans la console.",
+  app_url_missing:        "NEXT_PUBLIC_APP_URL non configuré.",
+  access_denied:          "Accès refusé — tu as annulé ou tu n'es pas dans les testeurs autorisés.",
+};
+
 function formatExpiry(isoDate: string): string {
   const diff = new Date(isoDate).getTime() - Date.now();
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -72,7 +84,9 @@ function ConnectionsContent({
       setToast({ msg: `${label} connecté avec succès`, ok: true });
       router.replace("/settings/connections");
     } else if (error) {
-      setToast({ msg: decodeURIComponent(error), ok: false });
+      const decoded = decodeURIComponent(error);
+      const friendly = ERROR_MESSAGES[decoded] ?? decoded;
+      setToast({ msg: friendly, ok: false });
       router.replace("/settings/connections");
     }
   }, [searchParams, router]);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
 import { decrypt } from "@/lib/crypto";
 import { upsertSocialAccount } from "@/lib/social/token-store";
 import * as tiktok from "@/lib/oauth/tiktok";
@@ -10,6 +11,12 @@ import type { SocialPlatform } from "@/types/social-account";
 
 const VALID_PLATFORMS: SocialPlatform[] = ["tiktok", "instagram", "youtube"];
 
+function failRedirect(req: NextRequest, code: string) {
+  return NextResponse.redirect(
+    new URL(`/settings/connections?error=${encodeURIComponent(code)}`, req.url)
+  );
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ platform: string }> }
@@ -19,49 +26,48 @@ export async function GET(
 
   const { platform: rawPlatform } = await params;
   const platform = rawPlatform as SocialPlatform;
-  const failUrl = new URL("/settings/connections?error=oauth_failed", req.url);
 
   if (!VALID_PLATFORMS.includes(platform)) {
     return NextResponse.json({ error: "Unknown platform" }, { status: 400 });
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (!appUrl) return NextResponse.redirect(failUrl);
+  if (!appUrl) return failRedirect(req, "app_url_missing");
 
   const { searchParams } = req.nextUrl;
   const code = searchParams.get("code");
   const returnedState = searchParams.get("state");
   const errorParam = searchParams.get("error");
 
+  // Platform returned an error (e.g. user denied, access_denied)
   if (errorParam) {
-    return NextResponse.redirect(
-      new URL(`/settings/connections?error=${encodeURIComponent(errorParam)}`, req.url)
-    );
+    return failRedirect(req, errorParam);
   }
 
-  if (!code || !returnedState) return NextResponse.redirect(failUrl);
+  if (!code || !returnedState) return failRedirect(req, "missing_code_or_state");
 
-  // Verify CSRF state
-  const rawCookie = req.cookies.get(`oauth_state_${platform}`)?.value;
-  if (!rawCookie) return NextResponse.redirect(failUrl);
+  // Read cookie via next/headers — consistent with how we wrote it
+  const cookieStore = await cookies();
+  const rawCookie = cookieStore.get(`oauth_state_${platform}`)?.value;
+
+  if (!rawCookie) return failRedirect(req, "session_expired");
 
   let cookiePayload: OAuthStateCookie;
   try {
     cookiePayload = JSON.parse(decrypt(rawCookie)) as OAuthStateCookie;
   } catch {
-    return NextResponse.redirect(failUrl);
+    return failRedirect(req, "session_corrupted");
   }
 
-  if (cookiePayload.state !== returnedState) return NextResponse.redirect(failUrl);
+  if (cookiePayload.state !== returnedState) return failRedirect(req, "state_mismatch");
 
   const redirectUri = `${appUrl}/api/callback/${platform}`;
 
   try {
     if (platform === "tiktok") {
-      if (!cookiePayload.codeVerifier) return NextResponse.redirect(failUrl);
+      if (!cookiePayload.codeVerifier) return failRedirect(req, "missing_code_verifier");
       const tokens = await tiktok.exchangeCode(code, redirectUri, cookiePayload.codeVerifier);
       const userInfo = await tiktok.fetchUserInfo(tokens.accessToken);
-
       await upsertSocialAccount({
         userId,
         platform,
@@ -75,7 +81,6 @@ export async function GET(
     } else if (platform === "instagram") {
       const tokens = await instagram.exchangeCode(code, redirectUri);
       const userInfo = await instagram.fetchUserInfo(tokens.accessToken);
-
       await upsertSocialAccount({
         userId,
         platform,
@@ -89,7 +94,6 @@ export async function GET(
     } else {
       const tokens = await youtube.exchangeCode(code, redirectUri);
       const userInfo = await youtube.fetchUserInfo(tokens.accessToken);
-
       await upsertSocialAccount({
         userId,
         platform,
@@ -102,12 +106,14 @@ export async function GET(
       });
     }
 
-    const successUrl = new URL(`/settings/connections?connected=${platform}`, req.url);
-    const res = NextResponse.redirect(successUrl);
-    res.cookies.set(`oauth_state_${platform}`, "", { maxAge: 0, path: "/" });
-    return res;
+    // Clear state cookie
+    cookieStore.delete(`oauth_state_${platform}`);
+
+    return NextResponse.redirect(
+      new URL(`/settings/connections?connected=${platform}`, req.url)
+    );
   } catch (err) {
     console.error(`[OAuth callback] ${platform}:`, err instanceof Error ? err.message : err);
-    return NextResponse.redirect(failUrl);
+    return failRedirect(req, "token_exchange_failed");
   }
 }

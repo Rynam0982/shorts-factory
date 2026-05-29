@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
 import { generateState } from "@/lib/oauth/base";
 import * as tiktok from "@/lib/oauth/tiktok";
 import * as instagram from "@/lib/oauth/instagram";
@@ -25,7 +26,9 @@ export async function GET(
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (!appUrl) {
-    return NextResponse.json({ error: "NEXT_PUBLIC_APP_URL not configured" }, { status: 500 });
+    return NextResponse.redirect(
+      new URL("/settings/connections?error=app_url_missing", req.url)
+    );
   }
 
   const redirectUri = `${appUrl}/api/callback/${platform}`;
@@ -45,18 +48,18 @@ export async function GET(
       authUrl = youtube.buildAuthUrl(redirectUri, state);
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Platform not configured";
+    const msg = err instanceof Error ? err.message : "platform_not_configured";
     return NextResponse.redirect(
       new URL(`/settings/connections?error=${encodeURIComponent(msg)}`, req.url)
     );
   }
 
-  // Store state + codeVerifier in an encrypted httpOnly cookie (10min TTL)
+  // Use next/headers cookies() — more reliable than setting on NextResponse.redirect
   const cookiePayload = JSON.stringify({ state, ...(codeVerifier && { codeVerifier }) });
   const encryptedCookie = encrypt(cookiePayload);
 
-  const res = NextResponse.redirect(authUrl);
-  res.cookies.set(`oauth_state_${platform}`, encryptedCookie, {
+  const cookieStore = await cookies();
+  cookieStore.set(`oauth_state_${platform}`, encryptedCookie, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -64,5 +67,5 @@ export async function GET(
     path: "/",
   });
 
-  return res;
+  return NextResponse.redirect(authUrl);
 }
