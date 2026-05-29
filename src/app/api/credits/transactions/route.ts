@@ -10,15 +10,12 @@ export async function GET(req: NextRequest) {
     const snap = await adminDb
       .collection("credit_transactions")
       .where("userId", "==", clerkUserId)
-      .orderBy("createdAt", "desc")
       .limit(Math.min(limit, 100))
       .get();
 
-    const transactions = snap.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-      createdAt: d.data().createdAt?.toDate?.()?.toISOString() ?? null,
-    }));
+    const transactions = snap.docs
+      .map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() ?? null }))
+      .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 
     return NextResponse.json(transactions);
   } catch {

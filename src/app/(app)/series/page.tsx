@@ -18,10 +18,15 @@ export default async function SeriesPage() {
   const snap = await adminDb
     .collection("series")
     .where("userId", "==", userId)
-    .orderBy("createdAt", "desc")
     .get();
 
-  const series = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const series = snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+      const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
+      const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
+      return tb - ta;
+    });
 
   return (
     <div>

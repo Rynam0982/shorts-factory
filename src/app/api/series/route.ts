@@ -33,17 +33,18 @@ export async function GET() {
   const snap = await adminDb
     .collection("series")
     .where("userId", "==", userId)
-    .orderBy("createdAt", "desc")
     .get();
 
-  const series = snap.docs.map(d => ({
-    id: d.id,
-    ...d.data(),
-    createdAt: d.data().createdAt?.toDate?.()?.toISOString() ?? null,
-    updatedAt: d.data().updatedAt?.toDate?.()?.toISOString() ?? null,
-    lastRunAt: d.data().lastRunAt?.toDate?.()?.toISOString() ?? null,
-    nextRunAt: d.data().nextRunAt?.toDate?.()?.toISOString() ?? null,
-  }));
+  const series = snap.docs
+    .map(d => ({
+      id: d.id,
+      ...d.data(),
+      createdAt: d.data().createdAt?.toDate?.()?.toISOString() ?? null,
+      updatedAt: d.data().updatedAt?.toDate?.()?.toISOString() ?? null,
+      lastRunAt: d.data().lastRunAt?.toDate?.()?.toISOString() ?? null,
+      nextRunAt: d.data().nextRunAt?.toDate?.()?.toISOString() ?? null,
+    }))
+    .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 
   return NextResponse.json(series);
 }

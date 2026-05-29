@@ -27,11 +27,16 @@ export default async function JobsPage() {
   const snap = await adminDb
     .collection("jobs")
     .where("userId", "==", userId)
-    .orderBy("createdAt", "desc")
     .limit(50)
     .get();
 
-  const jobs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const jobs = snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+      const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
+      const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
+      return tb - ta;
+    });
 
   return (
     <div>

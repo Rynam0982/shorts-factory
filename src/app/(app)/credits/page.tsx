@@ -16,15 +16,12 @@ export default async function CreditsPage() {
   const txSnap = await adminDb
     .collection("credit_transactions")
     .where("userId", "==", userId)
-    .orderBy("createdAt", "desc")
     .limit(20)
     .get();
 
-  const transactions = txSnap.docs.map((d) => ({
-    id: d.id,
-    ...d.data(),
-    createdAt: d.data().createdAt?.toDate?.()?.toISOString() ?? null,
-  }));
+  const transactions = txSnap.docs
+    .map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() ?? null }))
+    .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 
   const TYPE_LABELS: Record<string, string> = {
     PURCHASE: "Achat",

@@ -24,11 +24,17 @@ export default async function DashboardPage() {
   const recentSnap = await adminDb
     .collection("jobs")
     .where("userId", "==", userId)
-    .orderBy("createdAt", "desc")
-    .limit(4)
+    .limit(20)
     .get();
 
-  const recentJobs = recentSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const recentJobs = recentSnap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+      const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
+      const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
+      return tb - ta;
+    })
+    .slice(0, 4);
 
   const seriesSnap = await adminDb
     .collection("series")
