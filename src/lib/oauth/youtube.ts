@@ -1,11 +1,11 @@
 const CLIENT_ID = (): string => {
-  const v = process.env.GOOGLE_CLIENT_ID;
-  if (!v) throw new Error("GOOGLE_CLIENT_ID not set");
+  const v = process.env.YOUTUBE_CLIENT_ID;
+  if (!v) throw new Error("YOUTUBE_CLIENT_ID not set");
   return v;
 };
 const CLIENT_SECRET = (): string => {
-  const v = process.env.GOOGLE_CLIENT_SECRET;
-  if (!v) throw new Error("GOOGLE_CLIENT_SECRET not set");
+  const v = process.env.YOUTUBE_CLIENT_SECRET;
+  if (!v) throw new Error("YOUTUBE_CLIENT_SECRET not set");
   return v;
 };
 

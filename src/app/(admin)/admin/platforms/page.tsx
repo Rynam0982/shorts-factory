@@ -25,7 +25,7 @@ const PLATFORMS: PlatformConfig[] = [
     id: "youtube",
     label: "YouTube Shorts",
     icon: "▶️",
-    envVars: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+    envVars: ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"],
   },
 ];
 
