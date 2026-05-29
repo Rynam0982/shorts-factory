@@ -49,9 +49,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   state_mismatch:         "Vérification de sécurité échouée, réessaie.",
   missing_code_or_state:  "Réponse OAuth incomplète, réessaie.",
   missing_code_verifier:  "Erreur interne PKCE, réessaie.",
-  token_exchange_failed:  "Échange de token échoué — vérifie tes credentials dans la console.",
   app_url_missing:        "NEXT_PUBLIC_APP_URL non configuré.",
-  access_denied:          "Accès refusé — tu as annulé ou tu n'es pas dans les testeurs autorisés.",
+  access_denied:          "Accès refusé — tu n'es pas dans les testeurs autorisés (Google Cloud Console).",
 };
 
 function formatExpiry(isoDate: string): string {
@@ -85,7 +84,9 @@ function ConnectionsContent({
       router.replace("/settings/connections");
     } else if (error) {
       const decoded = decodeURIComponent(error);
-      const friendly = ERROR_MESSAGES[decoded] ?? decoded;
+      // Check exact match first, then prefix match (e.g. "token_exchange_failed: ...")
+      const key = Object.keys(ERROR_MESSAGES).find(k => decoded === k || decoded.startsWith(k + ":"));
+      const friendly = key ? ERROR_MESSAGES[key] + (decoded.includes(":") ? `\n${decoded.split(":").slice(1).join(":").trim()}` : "") : decoded;
       setToast({ msg: friendly, ok: false });
       router.replace("/settings/connections");
     }

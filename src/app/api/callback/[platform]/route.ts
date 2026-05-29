@@ -113,7 +113,10 @@ export async function GET(
       new URL(`/settings/connections?connected=${platform}`, req.url)
     );
   } catch (err) {
-    console.error(`[OAuth callback] ${platform}:`, err instanceof Error ? err.message : err);
-    return failRedirect(req, "token_exchange_failed");
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[OAuth callback] ${platform}: ${msg}`);
+    // Pass the actual API error message to the client (truncated, no secrets)
+    const safeMsg = msg.replace(/secret[^\s]*/gi, "***").substring(0, 120);
+    return failRedirect(req, encodeURIComponent(`token_exchange_failed: ${safeMsg}`));
   }
 }
