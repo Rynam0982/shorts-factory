@@ -9,7 +9,8 @@ const CLIENT_SECRET = (): string => {
   return v;
 };
 
-const SCOPE = "https://www.googleapis.com/auth/youtube.upload";
+// youtube.upload = permission d'upload, openid profile email = infos utilisateur
+const SCOPE = "https://www.googleapis.com/auth/youtube.upload openid profile email";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
@@ -92,6 +93,11 @@ export async function fetchUserInfo(accessToken: string): Promise<YouTubeUserInf
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const data = await res.json();
-  if (data.error) throw new Error(`YouTube userinfo error: ${data.error.message}`);
-  return { sub: data.sub, name: data.name, email: data.email };
+  if (data.error) {
+    const msg = typeof data.error === "string"
+      ? (data.error_description ?? data.error)
+      : (data.error.message ?? JSON.stringify(data.error));
+    throw new Error(`YouTube userinfo error: ${msg}`);
+  }
+  return { sub: data.sub, name: data.name ?? data.email ?? "YouTube User", email: data.email ?? "" };
 }
