@@ -23,5 +23,12 @@ export default async function ConnectionsPage() {
     };
   }
 
-  return <ConnectionsClient accounts={accountMap} />;
+  // Check which platform apps are configured server-side — never expose keys to client
+  const configuredPlatforms: Record<SocialPlatform, boolean> = {
+    tiktok:    !!(process.env.TIKTOK_CLIENT_KEY && process.env.TIKTOK_CLIENT_SECRET),
+    instagram: !!(process.env.META_APP_ID && process.env.META_APP_SECRET),
+    youtube:   !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+  };
+
+  return <ConnectionsClient accounts={accountMap} configuredPlatforms={configuredPlatforms} />;
 }

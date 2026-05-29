@@ -43,8 +43,7 @@ const PLATFORMS: Platform[] = [
 ];
 
 function formatExpiry(isoDate: string): string {
-  const d = new Date(isoDate);
-  const diff = d.getTime() - Date.now();
+  const diff = new Date(isoDate).getTime() - Date.now();
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   if (days < 0) return "Expiré";
   if (days === 0) return "Expire aujourd'hui";
@@ -54,8 +53,10 @@ function formatExpiry(isoDate: string): string {
 
 function ConnectionsContent({
   accounts,
+  configuredPlatforms,
 }: {
   accounts: Partial<Record<SocialPlatform, AccountInfo>>;
+  configuredPlatforms: Record<SocialPlatform, boolean>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -71,7 +72,7 @@ function ConnectionsContent({
       setToast({ msg: `${label} connecté avec succès`, ok: true });
       router.replace("/settings/connections");
     } else if (error) {
-      setToast({ msg: `Erreur : ${decodeURIComponent(error)}`, ok: false });
+      setToast({ msg: decodeURIComponent(error), ok: false });
       router.replace("/settings/connections");
     }
   }, [searchParams, router]);
@@ -87,7 +88,7 @@ function ConnectionsContent({
     try {
       const res = await fetch(`/api/connections/${platform}`, { method: "DELETE" });
       if (res.ok) {
-        setToast({ msg: `${platform} déconnecté`, ok: true });
+        setToast({ msg: `Compte ${platform} déconnecté`, ok: true });
         router.refresh();
       } else {
         setToast({ msg: "Erreur lors de la déconnexion", ok: false });
@@ -103,16 +104,10 @@ function ConnectionsContent({
     <div style={{ maxWidth: 680 }}>
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            color: "var(--accent-bright)",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            marginBottom: 7,
-          }}
-        >
+        <div style={{
+          fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent-bright)",
+          letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 7,
+        }}>
           Réseaux sociaux
         </div>
         <h1 style={{ fontSize: 26, fontFamily: "var(--font-display)", fontWeight: 700, color: "var(--tx-0)" }}>
@@ -125,18 +120,13 @@ function ConnectionsContent({
 
       {/* Toast */}
       {toast && (
-        <div
-          style={{
-            marginBottom: 20,
-            padding: "12px 16px",
-            borderRadius: 10,
-            fontSize: 13,
-            fontWeight: 600,
-            background: toast.ok ? "oklch(0.74 0.16 155 / 0.13)" : "oklch(0.65 0.2 25 / 0.13)",
-            color: toast.ok ? "var(--ok)" : "var(--error, oklch(0.65 0.2 25))",
-            border: `1px solid ${toast.ok ? "oklch(0.74 0.16 155 / 0.35)" : "oklch(0.65 0.2 25 / 0.35)"}`,
-          }}
-        >
+        <div style={{
+          marginBottom: 20, padding: "12px 16px", borderRadius: 10,
+          fontSize: 13, fontWeight: 600,
+          background: toast.ok ? "oklch(0.74 0.16 155 / 0.13)" : "oklch(0.65 0.2 25 / 0.13)",
+          color: toast.ok ? "var(--ok)" : "oklch(0.65 0.2 25)",
+          border: `1px solid ${toast.ok ? "oklch(0.74 0.16 155 / 0.35)" : "oklch(0.65 0.2 25 / 0.35)"}`,
+        }}>
           {toast.msg}
         </div>
       )}
@@ -146,6 +136,7 @@ function ConnectionsContent({
         {PLATFORMS.map((p) => {
           const account = accounts[p.id];
           const isConnected = !!account;
+          const isConfigured = configuredPlatforms[p.id];
           const isDisconnecting = disconnecting === p.id;
 
           return (
@@ -161,91 +152,76 @@ function ConnectionsContent({
                 border: isConnected
                   ? `1px solid ${p.borderColor}`
                   : "1px solid var(--line)",
+                opacity: !isConfigured && !isConnected ? 0.6 : 1,
               }}
             >
               {/* Left: icon + info */}
               <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 12,
-                    background: isConnected ? `${p.color.replace(")", " / 0.12)")}` : "var(--bg-2)",
-                    display: "grid",
-                    placeItems: "center",
-                    fontSize: 20,
-                    flexShrink: 0,
-                  }}
-                >
+                <div style={{
+                  width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+                  background: isConnected
+                    ? p.color.replace(")", " / 0.12)").replace("oklch(", "oklch(")
+                    : "var(--bg-2)",
+                  display: "grid", placeItems: "center", fontSize: 20,
+                }}>
                   {p.icon}
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 15,
-                      fontWeight: 700,
-                      color: "var(--tx-0)",
-                      marginBottom: 2,
-                    }}
-                  >
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "var(--tx-0)", marginBottom: 2 }}>
                     {p.label}
                   </div>
                   {isConnected ? (
                     <div style={{ fontSize: 12, color: "var(--tx-2)" }}>
-                      <span style={{ color: p.color, fontWeight: 600 }}>
-                        @{account.username}
-                      </span>
+                      <span style={{ color: p.color, fontWeight: 600 }}>@{account.username}</span>
                       {" · "}
                       <span style={{ fontFamily: "var(--font-mono)", color: "var(--tx-3)" }}>
                         {formatExpiry(account.expiresAt)}
                       </span>
                     </div>
                   ) : (
-                    <div style={{ fontSize: 12, color: "var(--tx-3)" }}>{p.description}</div>
+                    <div style={{ fontSize: 12, color: "var(--tx-3)" }}>
+                      {isConfigured ? p.description : "Non disponible — configuration admin requise"}
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Right: action button */}
+              {/* Right: action */}
               {isConnected ? (
                 <button
                   onClick={() => handleDisconnect(p.id)}
                   disabled={isDisconnecting}
                   style={{
-                    padding: "7px 16px",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    background: "var(--bg-2)",
-                    color: "var(--tx-2)",
+                    padding: "7px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                    background: "var(--bg-2)", color: "var(--tx-2)",
                     border: "1px solid var(--line)",
                     cursor: isDisconnecting ? "not-allowed" : "pointer",
                     opacity: isDisconnecting ? 0.6 : 1,
-                    flexShrink: 0,
-                    transition: "all .14s",
+                    flexShrink: 0, transition: "all .14s",
                   }}
                 >
-                  {isDisconnecting ? "..." : "Déconnecter"}
+                  {isDisconnecting ? "…" : "Déconnecter"}
                 </button>
-              ) : (
+              ) : isConfigured ? (
                 <a
                   href={`/api/connect/${p.id}`}
                   style={{
-                    padding: "7px 16px",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    background: "var(--accent-soft)",
-                    color: "var(--accent-bright)",
+                    padding: "7px 16px", borderRadius: 8, fontSize: 12, fontWeight: 700,
+                    background: "var(--accent-soft)", color: "var(--accent-bright)",
                     border: "1px solid var(--accent-line)",
-                    cursor: "pointer",
-                    flexShrink: 0,
-                    textDecoration: "none",
-                    transition: "all .14s",
+                    flexShrink: 0, textDecoration: "none", transition: "all .14s",
                   }}
                 >
                   Connecter
                 </a>
+              ) : (
+                <span style={{
+                  padding: "7px 14px", borderRadius: 8, fontSize: 11, fontWeight: 600,
+                  fontFamily: "var(--font-mono)", color: "var(--tx-3)",
+                  background: "var(--bg-1)", border: "1px solid var(--line)", flexShrink: 0,
+                }}>
+                  Non configuré
+                </span>
               )}
             </div>
           );
@@ -253,21 +229,14 @@ function ConnectionsContent({
       </div>
 
       {/* Note */}
-      <div
-        style={{
-          marginTop: 24,
-          padding: 16,
-          borderRadius: 10,
-          background: "var(--bg-1)",
-          border: "1px solid var(--line)",
-          fontSize: 12,
-          color: "var(--tx-3)",
-          lineHeight: 1.7,
-        }}
-      >
+      <div style={{
+        marginTop: 24, padding: 16, borderRadius: 10,
+        background: "var(--bg-1)", border: "1px solid var(--line)",
+        fontSize: 12, color: "var(--tx-3)", lineHeight: 1.7,
+      }}>
         <strong style={{ color: "var(--tx-2)" }}>Note :</strong> Les tokens OAuth sont chiffrés
-        AES-256-GCM avant stockage. Seules les vidéos que tu publies explicitement (via Séries AUTO
-        ou le studio) sont envoyées sur les plateformes connectées.
+        AES-256-GCM avant stockage. Seules les vidéos publiées via Séries AUTO ou le studio
+        sont envoyées sur les plateformes connectées.
       </div>
     </div>
   );
@@ -275,12 +244,14 @@ function ConnectionsContent({
 
 export default function ConnectionsClient({
   accounts,
+  configuredPlatforms,
 }: {
   accounts: Partial<Record<SocialPlatform, AccountInfo>>;
+  configuredPlatforms: Record<SocialPlatform, boolean>;
 }) {
   return (
     <Suspense fallback={null}>
-      <ConnectionsContent accounts={accounts} />
+      <ConnectionsContent accounts={accounts} configuredPlatforms={configuredPlatforms} />
     </Suspense>
   );
 }

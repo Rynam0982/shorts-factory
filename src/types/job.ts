@@ -56,6 +56,7 @@ export interface JobDoc {
   actualCredits: number | null;
   reservationTxId: string | null;
   triggerRunId: string | null;
+  captionStyle: string;
   errorMsg: string | null;
   isAdminTest: boolean;
   costBreakdown: CostBreakdown | null;

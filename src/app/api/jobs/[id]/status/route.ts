@@ -44,10 +44,12 @@ export async function GET(
               errorMsg: job.errorMsg ?? null,
               actualCredits: job.actualCredits ?? null,
               storyboard: job.storyboard ?? null,
+              publishResults: job.publishResults ?? null,
             });
           }
 
-          if (["READY", "DONE", "FAILED"].includes(job.status)) {
+          // Keep stream open through READY → PUBLISHING → DONE
+          if (["DONE", "FAILED"].includes(job.status)) {
             break;
           }
         } catch (err) {

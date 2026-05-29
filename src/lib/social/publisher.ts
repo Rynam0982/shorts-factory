@@ -106,7 +106,7 @@ export async function publishToYouTube(
   userId: string,
   videoUrl: string,
   title: string,
-  description: string
+  description = "Généré avec ShortsFactory"
 ): Promise<PublishResult> {
   try {
     const accessToken = await getValidToken(userId, "youtube");
@@ -161,9 +161,9 @@ const publishers: Record<
   SocialPlatform,
   (userId: string, videoUrl: string, title: string) => Promise<PublishResult>
 > = {
-  tiktok: publishToTikTok,
-  instagram: (u, v, t) => publishToInstagram(u, v, t),
-  youtube: (u, v, t) => publishToYouTube(u, v, t, t),
+  tiktok:    publishToTikTok,
+  instagram: publishToInstagram,
+  youtube:   publishToYouTube, // uses default description
 };
 
 export async function publishToAll(

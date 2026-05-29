@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { TEMPLATES } from "@/data/templates";
 import QualitySelector from "@/components/quality-selector";
 import CostEstimator from "@/components/cost-estimator";
-import { Sparkles, Music, Image as ImageIcon, Film, Loader2 } from "lucide-react";
+import { Sparkles, Music, Film, Loader2 } from "lucide-react";
 
 const CAPTION_STYLES = [
   { id: "wordbyword",  label: "Mot par mot" },
@@ -48,7 +48,6 @@ export default function StudioClient({ creditsBalance, isAdminTestMode, allowedQ
   const [captionStyle, setCaptionStyle] = useState("bold_center");
   const [platforms, setPlatforms]     = useState<string[]>(["tiktok", "youtube"]);
   const [useSuno, setUseSuno]         = useState(false);
-  const [useThumb, setUseThumb]       = useState(true);
   const [estimatedCredits, setEstimatedCredits] = useState(0);
 
   const tpl = TEMPLATES.find(t => t.id === template)!;
@@ -74,7 +73,6 @@ export default function StudioClient({ creditsBalance, isAdminTestMode, allowedQ
             captionStyle,
             platforms,
             useSunoMusic: useSuno,
-            useThumbnailAI: useThumb,
             creationMode: "FULL_AUTO",
           }),
         });
@@ -265,7 +263,6 @@ export default function StudioClient({ creditsBalance, isAdminTestMode, allowedQ
               <div style={{ display: "flex", gap: 12 }}>
                 {[
                   { label: "Musique IA (Suno)", sub: "+5 cr · piste originale", icon: <Music size={16} />, on: useSuno, toggle: () => setUseSuno(v => !v) },
-                  { label: "Miniature IA",      sub: "Thumbnail générée",       icon: <ImageIcon size={16} />, on: useThumb, toggle: () => setUseThumb(v => !v) },
                 ].map(({ label, sub, icon, on, toggle }) => (
                   <button
                     key={label}
