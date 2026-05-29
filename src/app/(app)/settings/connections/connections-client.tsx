@@ -55,11 +55,15 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 function formatExpiry(isoDate: string): string {
   const diff = new Date(isoDate).getTime() - Date.now();
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  if (days < 0) return "Expiré";
-  if (days === 0) return "Expire aujourd'hui";
-  if (days === 1) return "Expire demain";
-  return `Expire dans ${days}j`;
+  if (diff <= 0) return "Expiré (auto-refresh à la prochaine publication)";
+  const days    = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours   = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor(diff / (1000 * 60));
+  if (days >= 2)    return `Expire dans ${days}j`;
+  if (days === 1)   return "Expire demain";
+  if (hours >= 1)   return `Expire dans ${hours}h (auto-refresh)`;
+  if (minutes >= 1) return `Expire dans ${minutes}min (auto-refresh)`;
+  return "Expire bientôt (auto-refresh)";
 }
 
 function ConnectionsContent({
