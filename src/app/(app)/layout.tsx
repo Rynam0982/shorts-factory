@@ -26,8 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || null;
 
     const adminEmail = process.env.ADMIN_EMAIL;
-    const adminQuery = await adminDb.collection("users").where("role", "==", "admin").limit(1).get();
-    const role = adminEmail && primaryEmail === adminEmail && adminQuery.empty ? "admin" : "user";
+    const role = adminEmail && primaryEmail === adminEmail ? "admin" : "user";
 
     await adminDb.collection("users").doc(userId).set({
       email: primaryEmail,
@@ -63,7 +62,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     userDoc = await adminDb.collection("users").doc(userId).get();
   }
 
-  const user = userDoc.data()!;
+  let user = userDoc.data()!;
+
+  // Ensure ADMIN_EMAIL always has admin role, even if the doc was created before the env var was set
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (adminEmail && user.email === adminEmail && user.role !== "admin") {
+    await adminDb.collection("users").doc(userId).update({
+      role: "admin",
+      isAdminTestMode: true,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    user = { ...user, role: "admin", isAdminTestMode: true };
+  }
+
   if (user.bannedAt) redirect("/sign-in");
   if (user.deletedAt) redirect("/sign-in");
 

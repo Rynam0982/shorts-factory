@@ -61,16 +61,7 @@ export async function POST(req: NextRequest) {
   try {
     if (type === "user.created") {
       const adminEmail = process.env.ADMIN_EMAIL;
-
-      // Check if any admin already exists
-      const adminQuery = await adminDb
-        .collection("users")
-        .where("role", "==", "admin")
-        .limit(1)
-        .get();
-      const noAdminYet = adminQuery.empty;
-      const isAdminEmail = adminEmail && primaryEmail === adminEmail;
-      const role = isAdminEmail && noAdminYet ? "admin" : "user";
+      const role = adminEmail && primaryEmail === adminEmail ? "admin" : "user";
 
       await adminDb.collection("users").doc(userId).set({
         email: primaryEmail,
