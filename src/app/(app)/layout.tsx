@@ -8,13 +8,18 @@ import AppHeader from "@/components/app-header";
 
 const WELCOME_CREDITS = 100;
 
+function isAdminEmail(email: string): boolean {
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  return !!adminEmail && email.trim().toLowerCase() === adminEmail;
+}
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
   let userDoc = await adminDb.collection("users").doc(userId).get();
 
-  // Webhook not yet fired or race condition — provision user inline
+  // New user — provision Firestore document
   if (!userDoc.exists) {
     const clerkUser = await currentUser();
     if (!clerkUser) redirect("/sign-in");
@@ -25,8 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const name =
       [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || null;
 
-    const adminEmail = process.env.ADMIN_EMAIL;
-    const role = adminEmail && primaryEmail === adminEmail ? "admin" : "user";
+    const role = isAdminEmail(primaryEmail) ? "admin" : "user";
 
     await adminDb.collection("users").doc(userId).set({
       email: primaryEmail,
@@ -50,7 +54,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    // Crédits de bienvenue pour tous les nouveaux utilisateurs
+    userDoc = await adminDb.collection("users").doc(userId).get();
+  }
+
+  let user = userDoc.data()!;
+
+  // Promote to admin if email matches ADMIN_EMAIL (case-insensitive, handles env var set after signup)
+  if (isAdminEmail(user.email ?? "") && user.role !== "admin") {
+    await adminDb.collection("users").doc(userId).update({
+      role: "admin",
+      isAdminTestMode: true,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    user = { ...user, role: "admin", isAdminTestMode: true };
+  }
+
+  // Give welcome credits to any user who has never received any (handles users created before this feature)
+  if ((user.totalCreditsEarned ?? 0) === 0) {
     await applyCreditTransaction({
       userId,
       type: "BONUS",
@@ -58,21 +78,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       description: "Crédits de bienvenue 🎉",
       bypassBalanceCheck: true,
     });
-
-    userDoc = await adminDb.collection("users").doc(userId).get();
-  }
-
-  let user = userDoc.data()!;
-
-  // Ensure ADMIN_EMAIL always has admin role, even if the doc was created before the env var was set
-  const adminEmail = process.env.ADMIN_EMAIL;
-  if (adminEmail && user.email === adminEmail && user.role !== "admin") {
-    await adminDb.collection("users").doc(userId).update({
-      role: "admin",
-      isAdminTestMode: true,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    user = { ...user, role: "admin", isAdminTestMode: true };
+    user = { ...user, creditsBalance: (user.creditsBalance ?? 0) + WELCOME_CREDITS };
   }
 
   if (user.bannedAt) redirect("/sign-in");
