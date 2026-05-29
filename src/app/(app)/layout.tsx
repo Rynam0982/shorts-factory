@@ -6,11 +6,13 @@ import { applyCreditTransaction } from "@/lib/credits";
 import AppSidebar from "@/components/app-sidebar";
 import AppHeader from "@/components/app-header";
 
+// Crédits offerts à tout nouvel utilisateur (pas à l'admin qui a des crédits illimités)
 const WELCOME_CREDITS = 100;
 
-function isAdminEmail(email: string): boolean {
+function matchesAdminEmail(email: string): boolean {
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-  return !!adminEmail && email.trim().toLowerCase() === adminEmail;
+  if (!adminEmail) return false;
+  return email.trim().toLowerCase() === adminEmail;
 }
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -19,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   let userDoc = await adminDb.collection("users").doc(userId).get();
 
-  // New user — provision Firestore document
+  // ─── Nouveau user : provisionner le document Firestore ───────────────────────
   if (!userDoc.exists) {
     const clerkUser = await currentUser();
     if (!clerkUser) redirect("/sign-in");
@@ -30,7 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const name =
       [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || null;
 
-    const role = isAdminEmail(primaryEmail) ? "admin" : "user";
+    const isAdmin = matchesAdminEmail(primaryEmail);
 
     await adminDb.collection("users").doc(userId).set({
       email: primaryEmail,
@@ -46,39 +48,40 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       subscriptionId: null,
       subscriptionPeriodEnd: null,
       monthlyResetAt: null,
-      role,
-      isAdminTestMode: role === "admin",
+      role: isAdmin ? "admin" : "user",
+      isAdminTestMode: isAdmin,
       bannedAt: null,
       deletedAt: null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    // Crédits de bienvenue uniquement pour les users normaux
+    // L'admin a isAdminTestMode=true donc crédits illimités, pas besoin
+    if (!isAdmin) {
+      await applyCreditTransaction({
+        userId,
+        type: "BONUS",
+        amount: WELCOME_CREDITS,
+        description: "Crédits de bienvenue",
+        bypassBalanceCheck: true,
+      });
+    }
+
     userDoc = await adminDb.collection("users").doc(userId).get();
   }
 
   let user = userDoc.data()!;
 
-  // Promote to admin if email matches ADMIN_EMAIL (case-insensitive, handles env var set after signup)
-  if (isAdminEmail(user.email ?? "") && user.role !== "admin") {
+  // ─── Promotion admin : s'exécute à chaque connexion ─────────────────────────
+  // Corrige les docs créés avant que ADMIN_EMAIL soit défini dans Vercel
+  if (matchesAdminEmail(user.email ?? "") && (user.role !== "admin" || !user.isAdminTestMode)) {
     await adminDb.collection("users").doc(userId).update({
       role: "admin",
       isAdminTestMode: true,
       updatedAt: FieldValue.serverTimestamp(),
     });
     user = { ...user, role: "admin", isAdminTestMode: true };
-  }
-
-  // Give welcome credits to any user who has never received any (handles users created before this feature)
-  if ((user.totalCreditsEarned ?? 0) === 0) {
-    await applyCreditTransaction({
-      userId,
-      type: "BONUS",
-      amount: WELCOME_CREDITS,
-      description: "Crédits de bienvenue 🎉",
-      bypassBalanceCheck: true,
-    });
-    user = { ...user, creditsBalance: (user.creditsBalance ?? 0) + WELCOME_CREDITS };
   }
 
   if (user.bannedAt) redirect("/sign-in");
@@ -89,11 +92,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <AppSidebar isAdmin={user.role === "admin"} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         <AppHeader plan={user.plan} />
-        <main style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "28px 32px",
-        }}>
+        <main style={{ flex: 1, overflowY: "auto", padding: "28px 32px" }}>
           {children}
         </main>
       </div>
