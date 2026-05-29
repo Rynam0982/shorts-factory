@@ -2,8 +2,11 @@ import { redirect } from "next/navigation";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
+import { applyCreditTransaction } from "@/lib/credits";
 import AppSidebar from "@/components/app-sidebar";
 import AppHeader from "@/components/app-header";
+
+const WELCOME_CREDITS = 100;
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { userId } = await auth();
@@ -46,6 +49,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       deletedAt: null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // Crédits de bienvenue pour tous les nouveaux utilisateurs
+    await applyCreditTransaction({
+      userId,
+      type: "BONUS",
+      amount: WELCOME_CREDITS,
+      description: "Crédits de bienvenue 🎉",
+      bypassBalanceCheck: true,
     });
 
     userDoc = await adminDb.collection("users").doc(userId).get();
