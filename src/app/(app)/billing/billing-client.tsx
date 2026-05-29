@@ -32,10 +32,14 @@ const PLANS = [
   },
 ];
 
-export default function BillingClient({ user }: { user: Record<string, unknown> }) {
+export default function BillingClient({ user, stripeConfigured = true }: { user: Record<string, unknown>; stripeConfigured?: boolean }) {
   const [loading, setLoading] = useState<string | null>(null);
 
   async function subscribe(planId: string) {
+    if (!stripeConfigured) {
+      toast.error("Les paiements ne sont pas encore configurés. Contacte l'administrateur.");
+      return;
+    }
     setLoading(planId);
     try {
       const res = await fetch("/api/billing/checkout-subscription", {

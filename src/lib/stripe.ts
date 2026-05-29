@@ -32,9 +32,13 @@ export async function getOrCreateStripeCustomer(userId: string, email: string): 
   return customer.id;
 }
 
-// Price ID env mapping
+// Price ID env mapping — throws user-visible error, not a build-time crash
 export function getPriceId(envKey: string): string {
   const id = process.env[envKey];
-  if (!id) throw new Error(`Stripe Price ID not configured: ${envKey}`);
+  if (!id) throw new Error(`Ce plan n'est pas encore configuré (${envKey} manquant). Contacte l'administrateur.`);
   return id;
+}
+
+export function isStripeConfigured(): boolean {
+  return !!process.env.STRIPE_SECRET_KEY;
 }
