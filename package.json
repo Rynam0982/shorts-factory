@@ -6,7 +6,12 @@
     "onlyBuiltDependencies": [
       "sharp",
       "fluent-ffmpeg",
-      "@aws-sdk/client-s3"
+      "@aws-sdk/client-s3",
+      "@clerk/shared",
+      "@firebase/util",
+      "esbuild",
+      "msw",
+      "protobufjs"
     ]
   },
   "scripts": {
