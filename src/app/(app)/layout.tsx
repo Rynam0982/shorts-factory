@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
+import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
 import AppSidebar from "@/components/app-sidebar";
 import AppHeader from "@/components/app-header";
@@ -8,8 +9,47 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const userDoc = await adminDb.collection("users").doc(userId).get();
-  if (!userDoc.exists) redirect("/sign-in");
+  let userDoc = await adminDb.collection("users").doc(userId).get();
+
+  // Webhook not yet fired or race condition — provision user inline
+  if (!userDoc.exists) {
+    const clerkUser = await currentUser();
+    if (!clerkUser) redirect("/sign-in");
+
+    const primaryEmail =
+      clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
+        ?.emailAddress ?? "";
+    const name =
+      [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || null;
+
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminQuery = await adminDb.collection("users").where("role", "==", "admin").limit(1).get();
+    const role = adminEmail && primaryEmail === adminEmail && adminQuery.empty ? "admin" : "user";
+
+    await adminDb.collection("users").doc(userId).set({
+      email: primaryEmail,
+      name,
+      imageUrl: clerkUser.imageUrl ?? null,
+      clerkUserId: userId,
+      stripeCustomerId: null,
+      creditsBalance: 0,
+      totalCreditsEarned: 0,
+      totalCreditsSpent: 0,
+      plan: "free",
+      subscriptionStatus: "none",
+      subscriptionId: null,
+      subscriptionPeriodEnd: null,
+      monthlyResetAt: null,
+      role,
+      isAdminTestMode: role === "admin",
+      bannedAt: null,
+      deletedAt: null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    userDoc = await adminDb.collection("users").doc(userId).get();
+  }
 
   const user = userDoc.data()!;
   if (user.bannedAt) redirect("/sign-in");
