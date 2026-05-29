@@ -4,18 +4,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Plus, Film, Clock,
-  CreditCard, Receipt, User, ShieldCheck
+  CreditCard, Receipt, User, ShieldCheck, Link2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard",       icon: LayoutDashboard },
-  { href: "/create",    label: "Créer un short",   icon: Plus },
-  { href: "/series",    label: "Séries AUTO",      icon: Film },
-  { href: "/jobs",      label: "Historique",       icon: Clock },
-  { href: "/credits",   label: "Crédits",          icon: CreditCard },
-  { href: "/billing",   label: "Abonnement",       icon: Receipt },
-  { href: "/profile",   label: "Profil",           icon: User },
+  { href: "/dashboard",              label: "Dashboard",          icon: LayoutDashboard },
+  { href: "/create",                 label: "Créer un short",     icon: Plus },
+  { href: "/series",                 label: "Séries AUTO",        icon: Film },
+  { href: "/jobs",                   label: "Historique",         icon: Clock },
+  { href: "/credits",                label: "Crédits",            icon: CreditCard },
+  { href: "/billing",                label: "Abonnement",         icon: Receipt },
+  { href: "/settings/connections",   label: "Comptes connectés",  icon: Link2 },
+  { href: "/profile",                label: "Profil",             icon: User },
 ];
 
 export default function AppSidebar({ isAdmin }: { isAdmin: boolean }) {

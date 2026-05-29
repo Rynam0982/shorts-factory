@@ -1,8 +1,8 @@
 export default function AdminPlatformsPage() {
   const platforms = [
-    { id: "youtube",   label: "YouTube",  env: ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"] },
+    { id: "youtube",   label: "YouTube",  env: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] },
     { id: "tiktok",    label: "TikTok",   env: ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"] },
-    { id: "instagram", label: "Instagram",env: ["INSTAGRAM_APP_ID", "INSTAGRAM_APP_SECRET"] },
+    { id: "instagram", label: "Instagram",env: ["META_APP_ID", "META_APP_SECRET"] },
   ];
 
   return (

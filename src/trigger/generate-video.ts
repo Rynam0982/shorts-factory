@@ -6,7 +6,9 @@ import { generateStoryboard } from "@/lib/pipeline/generate-storyboard";
 import { generateScene } from "@/lib/pipeline/generate-scene";
 import { assembleFullVideo } from "@/lib/pipeline/assemble-video";
 import { MissingApiKeyError } from "@/lib/api-clients";
+import { publishToAll } from "@/lib/social/publisher";
 import type { JobDoc } from "@/types/job";
+import type { SocialPlatform } from "@/types/social-account";
 
 async function updateJob(jobId: string, data: Partial<JobDoc>) {
   await adminDb.collection("jobs").doc(jobId).update({
@@ -72,6 +74,19 @@ export const generateVideoTask = task({
         thumbnailUrl,
         actualCredits: job.estimatedCredits,
       });
+
+      // ── 6. Publish to connected social accounts ────────────
+      const platforms = (job.platforms ?? []) as SocialPlatform[];
+      if (platforms.length > 0 && job.userId && finalVideoUrl) {
+        await updateJob(jobId, { status: "PUBLISHING" });
+
+        const title = job.storyboard?.title ?? job.userPrompt.substring(0, 100);
+        const publishResults = await publishToAll(job.userId, platforms, finalVideoUrl, title);
+
+        await updateJob(jobId, { status: "DONE", publishResults });
+      } else {
+        await updateJob(jobId, { status: "DONE", publishResults: null });
+      }
 
     } catch (error) {
       // Always release reservation on error

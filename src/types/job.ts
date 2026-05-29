@@ -29,6 +29,12 @@ export interface CostBreakdown {
   totalEur: number;
 }
 
+export interface PublishResult {
+  ok: boolean;
+  platformPostId?: string;
+  error?: string;
+}
+
 export interface JobDoc {
   id: string;
   userId: string | null;
@@ -53,6 +59,8 @@ export interface JobDoc {
   errorMsg: string | null;
   isAdminTest: boolean;
   costBreakdown: CostBreakdown | null;
+  platforms: ("youtube" | "tiktok" | "instagram")[];
+  publishResults: Record<string, PublishResult> | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
