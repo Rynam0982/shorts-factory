@@ -61,29 +61,47 @@ export async function POST(req: NextRequest) {
   try {
     if (type === "user.created") {
       const adminEmail = process.env.ADMIN_EMAIL;
-      const role = adminEmail && primaryEmail === adminEmail ? "admin" : "user";
+      const isAdmin = !!adminEmail && primaryEmail.toLowerCase() === adminEmail.trim().toLowerCase();
 
-      await adminDb.collection("users").doc(userId).set({
-        email: primaryEmail,
-        name,
-        imageUrl: data.image_url,
-        clerkUserId: userId,
-        stripeCustomerId: null,
-        creditsBalance: 0,
-        totalCreditsEarned: 0,
-        totalCreditsSpent: 0,
-        plan: "free",
-        subscriptionStatus: "none",
-        subscriptionId: null,
-        subscriptionPeriodEnd: null,
-        monthlyResetAt: null,
-        role,
-        isAdminTestMode: role === "admin",
-        bannedAt: null,
-        deletedAt: null,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+      // Check if another account with the same email already exists (duplicate OAuth)
+      const duplicateSnap = await adminDb
+        .collection("users")
+        .where("email", "==", primaryEmail)
+        .limit(1)
+        .get();
+
+      if (!duplicateSnap.empty) {
+        // Merge: copy existing account so both OAuth accounts share the same credits/plan/role
+        const existing = duplicateSnap.docs[0].data();
+        await adminDb.collection("users").doc(userId).set({
+          ...existing,
+          clerkUserId: userId,
+          imageUrl: data.image_url ?? existing.imageUrl,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } else {
+        await adminDb.collection("users").doc(userId).set({
+          email: primaryEmail,
+          name,
+          imageUrl: data.image_url,
+          clerkUserId: userId,
+          stripeCustomerId: null,
+          creditsBalance: 0,
+          totalCreditsEarned: 0,
+          totalCreditsSpent: 0,
+          plan: "free",
+          subscriptionStatus: "none",
+          subscriptionId: null,
+          subscriptionPeriodEnd: null,
+          monthlyResetAt: null,
+          role: isAdmin ? "admin" : "user",
+          isAdminTestMode: isAdmin,
+          bannedAt: null,
+          deletedAt: null,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
     } else if (type === "user.updated") {
       await adminDb.collection("users").doc(userId).update({
         email: primaryEmail,

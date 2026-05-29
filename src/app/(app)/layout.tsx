@@ -30,27 +30,45 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
     const isAdmin = matchesAdminEmail(primaryEmail);
 
-    await adminDb.collection("users").doc(userId).set({
-      email: primaryEmail,
-      name,
-      imageUrl: clerkUser.imageUrl ?? null,
-      clerkUserId: userId,
-      stripeCustomerId: null,
-      creditsBalance: 0,
-      totalCreditsEarned: 0,
-      totalCreditsSpent: 0,
-      plan: "free",
-      subscriptionStatus: "none",
-      subscriptionId: null,
-      subscriptionPeriodEnd: null,
-      monthlyResetAt: null,
-      role: isAdmin ? "admin" : "user",
-      isAdminTestMode: isAdmin,
-      bannedAt: null,
-      deletedAt: null,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    // Check if another account with the same email already exists (Google + GitHub duplicate)
+    const duplicateSnap = await adminDb
+      .collection("users")
+      .where("email", "==", primaryEmail)
+      .limit(1)
+      .get();
+
+    if (!duplicateSnap.empty) {
+      // Merge: copy existing account data so both OAuth accounts share credits/plan/role
+      const existing = duplicateSnap.docs[0].data();
+      await adminDb.collection("users").doc(userId).set({
+        ...existing,
+        clerkUserId: userId,
+        imageUrl: clerkUser.imageUrl ?? existing.imageUrl,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } else {
+      await adminDb.collection("users").doc(userId).set({
+        email: primaryEmail,
+        name,
+        imageUrl: clerkUser.imageUrl ?? null,
+        clerkUserId: userId,
+        stripeCustomerId: null,
+        creditsBalance: 0,
+        totalCreditsEarned: 0,
+        totalCreditsSpent: 0,
+        plan: "free",
+        subscriptionStatus: "none",
+        subscriptionId: null,
+        subscriptionPeriodEnd: null,
+        monthlyResetAt: null,
+        role: isAdmin ? "admin" : "user",
+        isAdminTestMode: isAdmin,
+        bannedAt: null,
+        deletedAt: null,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
 
     userDoc = await adminDb.collection("users").doc(userId).get();
   }
