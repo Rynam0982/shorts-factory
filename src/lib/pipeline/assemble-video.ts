@@ -1,5 +1,6 @@
 import { assembleVideo as ffmpegAssemble, extractBestFrame } from "../ffmpeg";
-import { generateVoiceover } from "../elevenlabs";
+import { generateVoiceoverWithTimestamps } from "../elevenlabs";
+import { generateVoiceoverGoogle } from "../elevenlabs";
 import { getPixabayTrack } from "../pixabay";
 import { uploadToR2 } from "../r2";
 import type { Storyboard } from "@/types/storyboard";
@@ -12,32 +13,52 @@ export async function assembleFullVideo(params: {
 }): Promise<{ finalVideoUrl: string; thumbnailUrl: string }> {
   const { scenePaths, storyboard, job } = params;
 
-  // Merge voiceover text from all scenes
   const fullVoiceoverText = storyboard.scenes
     .map(s => s.voiceoverText)
     .join(" ");
 
-  // Generate voiceover
-  const voiceModel = job.videoQuality === "cinema" ? "multi" : "flash";
-  const voiceoverPath = await generateVoiceover({
-    text: fullVoiceoverText,
-    model: voiceModel,
-  });
+  // ── 1. Generate voiceover ──────────────────────────────────────────────────
+  let voiceoverPath: string;
+  let wordTimestamps: import("../elevenlabs").WordTimestamp[] = [];
 
-  // Get background music
-  const bgmPath = await getPixabayTrack(storyboard.suggestedMood);
+  if (job.voiceProvider === "google" && process.env.GOOGLE_CLOUD_TTS_API_KEY) {
+    const result = await generateVoiceoverGoogle({
+      text: fullVoiceoverText,
+      voiceName: job.voiceId ?? "fr-FR-Wavenet-D",
+      languageCode: job.voiceLanguage ?? "fr-FR",
+    });
+    voiceoverPath = result.audioPath;
+    wordTimestamps = result.wordTimestamps;
+  } else {
+    // ElevenLabs (default)
+    const voiceModel = job.videoQuality === "cinema" ? "multi" : "flash";
+    const result = await generateVoiceoverWithTimestamps({
+      text: fullVoiceoverText,
+      voiceId: job.voiceId ?? undefined,
+      model: voiceModel,
+    });
+    voiceoverPath = result.audioPath;
+    wordTimestamps = result.wordTimestamps;
+  }
 
-  // Assemble
-  const jobData = job as unknown as Record<string, unknown>;
+  // ── 2. Background music ───────────────────────────────────────────────────
+  const bgmPath = await getPixabayTrack(job.musicMood ?? storyboard.suggestedMood);
+
+  // ── 3. Assemble ───────────────────────────────────────────────────────────
   const outputPath = await ffmpegAssemble({
     scenePaths,
     bgmPath,
     voiceoverPath,
     storyboard,
     job,
+    wordTimestamps,
+    audioVoiceBalance: job.audioVoiceBalance ?? 80,
+    audioMusicBalance: job.audioMusicBalance ?? 20,
+    transitionStyle: job.transitionStyle ?? "cut",
+    fps: job.fps ?? 30,
   });
 
-  // Upload to R2
+  // ── 4. Upload to R2 ───────────────────────────────────────────────────────
   const [finalVideoUrl, thumbnailUrl] = await Promise.all([
     uploadToR2(outputPath, `jobs/${job.id}/final.mp4`, "video/mp4"),
     extractBestFrame(outputPath).then(thumbPath =>

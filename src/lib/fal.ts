@@ -8,21 +8,39 @@ const PROVIDER_MODELS: Record<string, string> = {
   wan:           "fal-ai/wan-i2v",
 };
 
+// Ratios supported per provider
+const PROVIDER_RATIOS: Record<string, string[]> = {
+  hailuo:         ["9:16", "16:9", "1:1", "4:3", "3:4", "2:3"],
+  kling_standard: ["9:16", "16:9", "1:1"],
+  kling_pro:      ["9:16", "16:9", "1:1"],
+  wan:            ["9:16", "16:9", "1:1"],
+};
+
+function safeRatio(model: string, requested: string): string {
+  const supported = PROVIDER_RATIOS[model];
+  if (!supported || supported.includes(requested)) return requested;
+  // Fallback to closest supported
+  return supported[0] ?? "9:16";
+}
+
 export async function falTextToVideo(params: {
   model: string;
   prompt: string;
   duration: number;
   audioEnabled?: boolean;
+  aspectRatio?: string;
+  fps?: number;
 }): Promise<string> {
   await configureFalClient();
-
   const modelId = PROVIDER_MODELS[params.model] ?? params.model;
+  const ratio = safeRatio(params.model, params.aspectRatio ?? "9:16");
 
   const result = await fal.subscribe(modelId, {
     input: {
       prompt: params.prompt,
       duration: params.duration,
-      aspect_ratio: "9:16",
+      aspect_ratio: ratio,
+      ...(params.fps ? { frame_rate: params.fps } : {}),
     },
     pollInterval: 5000,
     logs: false,
@@ -40,17 +58,20 @@ export async function falImageToVideo(params: {
   prompt: string;
   duration: number;
   audioPrompt?: string;
+  aspectRatio?: string;
+  fps?: number;
 }): Promise<string> {
   await configureFalClient();
-
   const modelId = PROVIDER_MODELS[params.model] ?? params.model;
+  const ratio = safeRatio(params.model, params.aspectRatio ?? "9:16");
 
   const result = await fal.subscribe(modelId, {
     input: {
       image_url: params.imageUrl,
       prompt: params.prompt,
       duration: params.duration,
-      aspect_ratio: "9:16",
+      aspect_ratio: ratio,
+      ...(params.fps ? { frame_rate: params.fps } : {}),
     },
     pollInterval: 5000,
     logs: false,
