@@ -15,7 +15,7 @@ import type { AspectRatio, VisualStyle, LightingTone, CameraMovement, CaptionSty
 import {
   ChevronRight, ChevronLeft, TrendingUp, Upload, X,
   Play, Pause, Loader2, CheckCircle, Music, Mic,
-  Sparkles, Info
+  Sparkles, Info, Search, RefreshCw, ChevronDown, SkipForward,
 } from "lucide-react";
 
 type VoiceProvider = "elevenlabs" | "google";
@@ -294,11 +294,15 @@ export default function StudioClient({ creditsBalance, isAdminTestMode, allowedQ
 function Step1Subject({ form, upd }: { form: FormState; upd: <K extends keyof FormState>(k: K, v: FormState[K]) => void }) {
   const [trends, setTrends] = useState<string[]>([]);
   const [loadingTrends, setLoadingTrends] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasFetchedNiche = useRef<string>("");
 
-  async function loadTrends() {
+  async function loadTrends(force = false) {
     setLoadingTrends(true);
     try {
-      const res = await fetch(`/api/trending?niche=${form.niche}&country=FR`);
+      const res = await fetch(`/api/trending?niche=${form.niche}&country=FR${force ? "&force=true" : ""}`);
       if (res.ok) {
         const data = await res.json();
         setTrends(data.topics ?? []);
@@ -307,6 +311,34 @@ function Step1Subject({ form, upd }: { form: FormState; upd: <K extends keyof Fo
       setLoadingTrends(false);
     }
   }
+
+  // Auto-fetch when niche changes
+  useEffect(() => {
+    if (hasFetchedNiche.current === form.niche) return;
+    hasFetchedNiche.current = form.niche;
+    loadTrends(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.niche]);
+
+  // Real-time suggestions while typing
+  useEffect(() => {
+    if (suggestDebounce.current) clearTimeout(suggestDebounce.current);
+    const q = form.prompt.trim();
+    if (q.length < 2) { setSuggestions([]); return; }
+    suggestDebounce.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/trending?niche=${form.niche}&country=FR`);
+        if (res.ok) {
+          const data = await res.json();
+          const all: string[] = data.topics ?? [];
+          const filtered = all.filter(t => t.toLowerCase().includes(q.toLowerCase()));
+          setSuggestions(filtered.slice(0, 4));
+        }
+      } catch { /* ignore */ }
+    }, 300);
+    return () => { if (suggestDebounce.current) clearTimeout(suggestDebounce.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.prompt, form.niche]);
 
   const tpl = TEMPLATES.find(t => t.id === form.template) ?? TEMPLATES[0];
 
@@ -342,18 +374,49 @@ function Step1Subject({ form, upd }: { form: FormState; upd: <K extends keyof Fo
         <div style={{ fontSize: 13, fontWeight: 700, color: "var(--tx-0)", marginBottom: 4 }}>2 · Décris ton sujet</div>
         <div style={{ fontSize: 12.5, color: "var(--tx-3)", marginBottom: 14 }}>Une phrase suffit. L&apos;IA s&apos;occupe du reste.</div>
 
-        <textarea
-          value={form.prompt}
-          onChange={e => upd("prompt", e.target.value)}
-          rows={3}
-          placeholder={`Ex : « ${tpl.name === "Prompt libre" ? "Un astronaute découvre une cité sous la glace de Mars" : "Les faits les plus fous sur les fonds marins"} »`}
-          style={{
-            width: "100%", resize: "none",
-            background: "var(--bg-1)", border: "1px solid var(--line)", borderRadius: 12,
-            padding: 14, color: "var(--tx-0)", fontSize: 14.5, lineHeight: 1.5,
-            outline: "none", fontFamily: "var(--font-body)",
-          }}
-        />
+        <div style={{ position: "relative" }}>
+          <textarea
+            value={form.prompt}
+            onChange={e => { upd("prompt", e.target.value); setShowSuggestions(true); }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            rows={3}
+            placeholder={`Ex : « ${tpl.name === "Prompt libre" ? "Un astronaute découvre une cité sous la glace de Mars" : "Les faits les plus fous sur les fonds marins"} »`}
+            style={{
+              width: "100%", resize: "none",
+              background: "var(--bg-1)", border: "1px solid var(--line)", borderRadius: 12,
+              padding: 14, color: "var(--tx-0)", fontSize: 14.5, lineHeight: 1.5,
+              outline: "none", fontFamily: "var(--font-body)",
+            }}
+          />
+          {showSuggestions && suggestions.length > 0 && (
+            <div style={{
+              position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
+              background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 10,
+              marginTop: 4, overflow: "hidden",
+              boxShadow: "0 8px 24px oklch(0 0 0 / 0.25)",
+            }}>
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onMouseDown={() => { upd("prompt", s); setSuggestions([]); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8, width: "100%",
+                    padding: "10px 14px", fontSize: 13, color: "var(--tx-1)",
+                    background: "transparent", border: "none", cursor: "pointer",
+                    textAlign: "left", borderBottom: i < suggestions.length - 1 ? "1px solid var(--line)" : "none",
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-3)")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                >
+                  <Search size={12} style={{ color: "var(--tx-3)", flexShrink: 0 }} />
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Niche + Trends */}
         <div style={{ marginTop: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -377,7 +440,7 @@ function Step1Subject({ form, upd }: { form: FormState; upd: <K extends keyof Fo
           </div>
           <button
             type="button"
-            onClick={loadTrends}
+            onClick={() => loadTrends(trends.length > 0)}
             disabled={loadingTrends}
             style={{
               display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px",
@@ -386,8 +449,10 @@ function Step1Subject({ form, upd }: { form: FormState; upd: <K extends keyof Fo
               border: "1px solid var(--accent-line)", cursor: "pointer",
             }}
           >
-            {loadingTrends ? <Loader2 size={12} style={{ animation: "spin 0.9s linear infinite" }} /> : <TrendingUp size={12} />}
-            Tendances du moment →
+            {loadingTrends
+              ? <Loader2 size={12} style={{ animation: "spin 0.9s linear infinite" }} />
+              : trends.length > 0 ? <RefreshCw size={12} /> : <TrendingUp size={12} />}
+            {trends.length > 0 ? "Nouvelles tendances" : "Tendances du moment →"}
           </button>
         </div>
 
@@ -654,17 +719,50 @@ function Step3Reference({ form, upd }: { form: FormState; upd: <K extends keyof 
 // STEP 4 — Audio
 // ═══════════════════════════════════════════════════════════════════
 function Step4Audio({ form, upd }: { form: FormState; upd: <K extends keyof FormState>(k: K, v: FormState[K]) => void }) {
-  const [voices, setVoices] = useState<{ voiceId: string; name: string; language: string; previewUrl: string | null }[]>([]);
+  const [voices, setVoices] = useState<{ voiceId: string; name: string; language: string; gender: string; accent: string | null; description: string | null; useCase: string | null; previewUrl: string | null }[]>([]);
+  const [voiceSearch, setVoiceSearch] = useState("");
+  const [voiceLang, setVoiceLang] = useState("");
+  const [voiceGender, setVoiceGender] = useState("");
+  const [loadingVoices, setLoadingVoices] = useState(false);
   const [playingPreview, setPlayingPreview] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playingMusic, setPlayingMusic] = useState(false);
+  const voiceDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [playingMusicMood, setPlayingMusicMood] = useState<string | null>(null);
+  const [musicTrackIndex, setMusicTrackIndex] = useState<Record<string, number>>({});
+  const [musicTotals, setMusicTotals] = useState<Record<string, number>>({});
+  const [musicSearch, setMusicSearch] = useState("");
+  const [loadingMusic, setLoadingMusic] = useState<string | null>(null);
   const musicAudioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Fetch voices with debounced search
   useEffect(() => {
-    fetch(`/api/voices?provider=${form.voiceProvider}&language=fr`)
-      .then(r => r.json())
-      .then(d => setVoices(d.voices ?? []));
-  }, [form.voiceProvider]);
+    if (voiceDebounce.current) clearTimeout(voiceDebounce.current);
+    voiceDebounce.current = setTimeout(async () => {
+      setLoadingVoices(true);
+      try {
+        const params = new URLSearchParams({ provider: form.voiceProvider });
+        if (voiceLang) params.set("language", voiceLang);
+        if (voiceGender) params.set("gender", voiceGender);
+        if (voiceSearch) params.set("search", voiceSearch);
+        const res = await fetch(`/api/voices?${params}`);
+        const d = await res.json();
+        setVoices(d.voices ?? []);
+      } finally {
+        setLoadingVoices(false);
+      }
+    }, voiceSearch ? 300 : 0);
+    return () => { if (voiceDebounce.current) clearTimeout(voiceDebounce.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.voiceProvider, voiceLang, voiceGender, voiceSearch]);
+
+  // Languages available for Google TTS
+  const GOOGLE_LANGS = [
+    { code: "fr-FR", label: "🇫🇷 Français" },
+    { code: "en-US", label: "🇺🇸 English" },
+    { code: "es-ES", label: "🇪🇸 Español" },
+    { code: "de-DE", label: "🇩🇪 Deutsch" },
+  ];
 
   function playVoicePreview(voiceId: string) {
     if (playingPreview === voiceId) {
@@ -680,23 +778,39 @@ function Step4Audio({ form, upd }: { form: FormState; upd: <K extends keyof Form
     audio.onended = () => setPlayingPreview(null);
   }
 
-  function playMusicPreview(mood: string) {
-    if (playingMusic) {
+  async function playMusicPreview(mood: string, index?: number) {
+    if (playingMusicMood === mood && index === undefined) {
       musicAudioRef.current?.pause();
-      setPlayingMusic(false);
+      setPlayingMusicMood(null);
       return;
     }
-    fetch(`/api/music/preview?mood=${mood}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.url) {
-          const audio = new Audio(d.url);
-          musicAudioRef.current = audio;
-          audio.play();
-          setPlayingMusic(true);
-          audio.onended = () => setPlayingMusic(false);
-        }
-      });
+    if (musicAudioRef.current) musicAudioRef.current.pause();
+    setLoadingMusic(mood);
+    const idx = index ?? (musicTrackIndex[mood] ?? 0);
+    try {
+      const params = new URLSearchParams({ mood, index: String(idx) });
+      if (musicSearch) params.set("search", musicSearch);
+      const res = await fetch(`/api/music/preview?${params}`);
+      const d = await res.json();
+      if (d.url) {
+        const audio = new Audio(d.url);
+        musicAudioRef.current = audio;
+        audio.play();
+        setPlayingMusicMood(mood);
+        setMusicTotals(prev => ({ ...prev, [mood]: d.total ?? 1 }));
+        audio.onended = () => setPlayingMusicMood(null);
+      }
+    } finally {
+      setLoadingMusic(null);
+    }
+  }
+
+  function nextMusicTrack(mood: string) {
+    const total = musicTotals[mood] ?? 1;
+    const cur = musicTrackIndex[mood] ?? 0;
+    const next = (cur + 1) % total;
+    setMusicTrackIndex(prev => ({ ...prev, [mood]: next }));
+    playMusicPreview(mood, next);
   }
 
   return (
@@ -709,12 +823,12 @@ function Step4Audio({ form, upd }: { form: FormState; upd: <K extends keyof Form
         </div>
 
         {/* Provider selector */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
           {[
             { id: "elevenlabs" as VoiceProvider, label: "ElevenLabs", desc: "Premium · 3000+ voix" },
             { id: "google" as VoiceProvider, label: "Google TTS", desc: "Gratuit · 1M chars/mois" },
           ].map(p => (
-            <button key={p.id} type="button" onClick={() => upd("voiceProvider", p.id)} style={{
+            <button key={p.id} type="button" onClick={() => { upd("voiceProvider", p.id); setVoiceSearch(""); setVoiceLang(""); setVoiceGender(""); }} style={{
               flex: 1, padding: "12px 16px", borderRadius: 12, textAlign: "left", cursor: "pointer",
               background: form.voiceProvider === p.id ? "var(--accent-soft)" : "var(--bg-1)",
               border: `1.5px solid ${form.voiceProvider === p.id ? "var(--accent-line)" : "var(--line)"}`,
@@ -725,10 +839,75 @@ function Step4Audio({ form, upd }: { form: FormState; upd: <K extends keyof Form
           ))}
         </div>
 
+        {/* Filters row */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+          {/* Search */}
+          <div style={{ flex: 1, minWidth: 140, position: "relative" }}>
+            <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--tx-3)", pointerEvents: "none" }} />
+            <input
+              value={voiceSearch}
+              onChange={e => setVoiceSearch(e.target.value)}
+              placeholder="Rechercher une voix…"
+              style={{
+                width: "100%", padding: "8px 10px 8px 30px", borderRadius: 9, fontSize: 12.5,
+                background: "var(--bg-1)", border: "1px solid var(--line)", color: "var(--tx-0)", outline: "none",
+              }}
+            />
+          </div>
+          {/* Language filter */}
+          {form.voiceProvider === "google" ? (
+            <select
+              value={voiceLang}
+              onChange={e => setVoiceLang(e.target.value)}
+              style={{ padding: "8px 10px", borderRadius: 9, fontSize: 12.5, background: "var(--bg-1)", border: "1px solid var(--line)", color: "var(--tx-0)", cursor: "pointer" }}
+            >
+              <option value="">Toutes langues</option>
+              {GOOGLE_LANGS.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+            </select>
+          ) : (
+            <select
+              value={voiceLang}
+              onChange={e => setVoiceLang(e.target.value)}
+              style={{ padding: "8px 10px", borderRadius: 9, fontSize: 12.5, background: "var(--bg-1)", border: "1px solid var(--line)", color: "var(--tx-0)", cursor: "pointer" }}
+            >
+              <option value="">Toutes langues</option>
+              <option value="fr">🇫🇷 Français</option>
+              <option value="en">🇺🇸 English</option>
+              <option value="es">🇪🇸 Español</option>
+              <option value="de">🇩🇪 Deutsch</option>
+              <option value="it">🇮🇹 Italiano</option>
+              <option value="pt">🇧🇷 Português</option>
+              <option value="ar">🇸🇦 Arabic</option>
+            </select>
+          )}
+          {/* Gender filter */}
+          <select
+            value={voiceGender}
+            onChange={e => setVoiceGender(e.target.value)}
+            style={{ padding: "8px 10px", borderRadius: 9, fontSize: 12.5, background: "var(--bg-1)", border: "1px solid var(--line)", color: "var(--tx-0)", cursor: "pointer" }}
+          >
+            <option value="">Tous genres</option>
+            <option value="male">Masculin</option>
+            <option value="female">Féminin</option>
+          </select>
+        </div>
+
+        {/* Voice count */}
+        {voices.length > 0 && (
+          <div style={{ fontSize: 11.5, color: "var(--tx-3)", marginBottom: 8, fontFamily: "var(--font-mono)" }}>
+            {voices.length} voix trouvée{voices.length > 1 ? "s" : ""}
+          </div>
+        )}
+
         {/* Voice list */}
-        {voices.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 240, overflowY: "auto" }}>
-            {voices.slice(0, 12).map(v => (
+        {loadingVoices ? (
+          <div style={{ padding: 20, textAlign: "center", color: "var(--tx-3)", fontSize: 13 }}>
+            <Loader2 size={18} style={{ animation: "spin 0.9s linear infinite", margin: "0 auto 8px", display: "block" }} />
+            Chargement des voix…
+          </div>
+        ) : voices.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 300, overflowY: "auto" }}>
+            {voices.map(v => (
               <div
                 key={v.voiceId}
                 onClick={() => { upd("voiceId", v.voiceId); if (form.voiceProvider === "google") upd("voiceLanguage", v.language); }}
@@ -739,9 +918,14 @@ function Step4Audio({ form, upd }: { form: FormState; upd: <K extends keyof Form
                   border: `1px solid ${form.voiceId === v.voiceId ? "var(--accent-line)" : "var(--line)"}`,
                 }}
               >
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--tx-0)" }}>{v.name}</div>
-                  <div style={{ fontSize: 11, color: "var(--tx-3)", fontFamily: "var(--font-mono)" }}>{v.language}</div>
+                  <div style={{ display: "flex", gap: 5, marginTop: 3, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 10.5, color: "var(--tx-3)", fontFamily: "var(--font-mono)" }}>{v.language}</span>
+                    {v.gender && <span style={{ fontSize: 10.5, padding: "1px 5px", borderRadius: 4, background: "var(--bg-3)", color: "var(--tx-3)" }}>{v.gender}</span>}
+                    {v.accent && <span style={{ fontSize: 10.5, padding: "1px 5px", borderRadius: 4, background: "var(--bg-3)", color: "var(--tx-3)" }}>{v.accent}</span>}
+                    {v.useCase && <span style={{ fontSize: 10.5, padding: "1px 5px", borderRadius: 4, background: "var(--bg-2)", color: "var(--tx-3)" }}>{v.useCase}</span>}
+                  </div>
                 </div>
                 {form.voiceProvider === "elevenlabs" && (
                   <button
@@ -752,6 +936,7 @@ function Step4Audio({ form, upd }: { form: FormState; upd: <K extends keyof Form
                       background: playingPreview === v.voiceId ? "var(--accent)" : "var(--bg-2)",
                       border: "1px solid var(--line)", cursor: "pointer",
                       color: playingPreview === v.voiceId ? "#fff" : "var(--tx-2)",
+                      flexShrink: 0,
                     }}
                   >
                     {playingPreview === v.voiceId ? <Pause size={12} /> : <Play size={12} />}
@@ -763,8 +948,7 @@ function Step4Audio({ form, upd }: { form: FormState; upd: <K extends keyof Form
           </div>
         ) : (
           <div style={{ padding: 20, textAlign: "center", color: "var(--tx-3)", fontSize: 13 }}>
-            <Loader2 size={18} style={{ animation: "spin 0.9s linear infinite", margin: "0 auto 8px", display: "block" }} />
-            Chargement des voix…
+            Aucune voix trouvée. Essaie d&apos;autres filtres.
           </div>
         )}
       </div>
@@ -775,6 +959,21 @@ function Step4Audio({ form, upd }: { form: FormState; upd: <K extends keyof Form
           <Music size={15} style={{ verticalAlign: "-2px", marginRight: 6, color: "var(--accent-bright)" }} />
           Musique de fond (Pixabay — gratuit)
         </div>
+
+        {/* Music search */}
+        <div style={{ position: "relative", marginBottom: 14 }}>
+          <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--tx-3)", pointerEvents: "none" }} />
+          <input
+            value={musicSearch}
+            onChange={e => setMusicSearch(e.target.value)}
+            placeholder="Rechercher un style (ex: lo-fi, jazz, cinematic…)"
+            style={{
+              width: "100%", padding: "9px 10px 9px 30px", borderRadius: 9, fontSize: 12.5,
+              background: "var(--bg-1)", border: "1px solid var(--line)", color: "var(--tx-0)", outline: "none",
+            }}
+          />
+        </div>
+
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
           {MUSIC_MOODS.map(m => (
             <div
@@ -789,17 +988,40 @@ function Step4Audio({ form, upd }: { form: FormState; upd: <K extends keyof Form
             >
               <div style={{ fontSize: 20, textAlign: "center" }}>{m.emoji}</div>
               <div style={{ fontSize: 12, fontWeight: 600, color: "var(--tx-0)", textAlign: "center" }}>{m.label}</div>
-              <button
-                type="button"
-                onClick={e => { e.stopPropagation(); upd("musicMood", m.id); playMusicPreview(m.id); }}
-                style={{
-                  padding: "4px 0", borderRadius: 6, fontSize: 10, fontWeight: 600,
-                  background: "var(--bg-2)", border: "1px solid var(--line)", color: "var(--tx-3)", cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                }}
-              >
-                {playingMusic && form.musicMood === m.id ? <><Pause size={9} />Stop</> : <><Play size={9} />5s</>}
-              </button>
+              <div style={{ display: "flex", gap: 3 }}>
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); upd("musicMood", m.id); playMusicPreview(m.id); }}
+                  style={{
+                    flex: 1, padding: "4px 0", borderRadius: 6, fontSize: 10, fontWeight: 600,
+                    background: "var(--bg-2)", border: "1px solid var(--line)", color: "var(--tx-3)", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
+                  }}
+                >
+                  {loadingMusic === m.id
+                    ? <Loader2 size={9} style={{ animation: "spin 0.9s linear infinite" }} />
+                    : playingMusicMood === m.id ? <><Pause size={9} />Stop</> : <><Play size={9} />Play</>}
+                </button>
+                {(musicTotals[m.id] ?? 0) > 1 && (
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); upd("musicMood", m.id); nextMusicTrack(m.id); }}
+                    title={`Piste ${(musicTrackIndex[m.id] ?? 0) + 1}/${musicTotals[m.id]}`}
+                    style={{
+                      width: 24, padding: "4px 0", borderRadius: 6, fontSize: 10,
+                      background: "var(--bg-2)", border: "1px solid var(--line)", color: "var(--tx-3)", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >
+                    <SkipForward size={9} />
+                  </button>
+                )}
+              </div>
+              {form.musicMood === m.id && (musicTotals[m.id] ?? 0) > 1 && (
+                <div style={{ fontSize: 9.5, color: "var(--tx-3)", textAlign: "center", fontFamily: "var(--font-mono)" }}>
+                  {(musicTrackIndex[m.id] ?? 0) + 1}/{musicTotals[m.id]}
+                </div>
+              )}
             </div>
           ))}
         </div>

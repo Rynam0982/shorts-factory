@@ -21,10 +21,11 @@ export async function GET(req: NextRequest) {
 
   const niche = req.nextUrl.searchParams.get("niche") ?? "science";
   const country = req.nextUrl.searchParams.get("country") ?? "FR";
+  const force = req.nextUrl.searchParams.get("force") === "true";
   const cacheKey = `${niche}:${country}`;
 
   const cached = trendCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (!force && cached && cached.expiresAt > Date.now()) {
     return NextResponse.json({ topics: cached.topics, source: "cache" });
   }
 
@@ -56,11 +57,12 @@ export async function GET(req: NextRequest) {
 
     throw new Error("No trends returned");
   } catch {
-    // Fallback to curated static list
-    const fallback = STATIC_SUGGESTIONS[niche] ?? STATIC_SUGGESTIONS.science;
-    // Shuffle for variety
-    const shuffled = [...fallback].sort(() => Math.random() - 0.5).slice(0, 5);
-    trendCache.set(cacheKey, { topics: shuffled, expiresAt: Date.now() + 60 * 60 * 1000 });
+    // Fallback: pool all niches for force-refresh variety, else use selected niche
+    const pool = force
+      ? Object.values(STATIC_SUGGESTIONS).flat()
+      : (STATIC_SUGGESTIONS[niche] ?? STATIC_SUGGESTIONS.science);
+    const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, 5);
+    if (!force) trendCache.set(cacheKey, { topics: shuffled, expiresAt: Date.now() + 60 * 60 * 1000 });
     return NextResponse.json({ topics: shuffled, source: "static" });
   }
 }

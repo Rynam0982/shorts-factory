@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { getElevenLabsClient } from "@/lib/api-clients";
 
+interface ElevenLabsVoice {
+  voiceId: string; name: string; language: string; gender: string;
+  accent: string | null; description: string | null; useCase: string | null; previewUrl: string | null;
+}
+
 // Cache 10 min
-let elevenLabsCache: { voices: unknown[]; expiresAt: number } | null = null;
+let elevenLabsCache: { voices: ElevenLabsVoice[]; expiresAt: number } | null = null;
 
 // Curated Google TTS voices (static list — doesn't require API call)
 const GOOGLE_VOICES = [
@@ -22,39 +27,50 @@ export async function GET(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const provider = req.nextUrl.searchParams.get("provider") ?? "elevenlabs";
-  const language = req.nextUrl.searchParams.get("language") ?? "fr";
+  const language = req.nextUrl.searchParams.get("language") ?? "";
+  const search = req.nextUrl.searchParams.get("search") ?? "";
+  const gender = req.nextUrl.searchParams.get("gender") ?? "";
 
   if (provider === "google") {
-    const filtered = language
-      ? GOOGLE_VOICES.filter(v => v.language.startsWith(language))
-      : GOOGLE_VOICES;
+    let filtered = [...GOOGLE_VOICES];
+    if (language) filtered = filtered.filter(v => v.language.startsWith(language));
+    if (gender) filtered = filtered.filter(v => v.gender.toLowerCase() === gender.toLowerCase());
+    if (search) filtered = filtered.filter(v => v.name.toLowerCase().includes(search.toLowerCase()));
     return NextResponse.json({ voices: filtered });
+  }
+
+  function applyFilters(list: ElevenLabsVoice[]) {
+    let out = list;
+    if (language) out = out.filter(v => v.language?.toLowerCase().startsWith(language.toLowerCase()));
+    if (gender) out = out.filter(v => v.gender?.toLowerCase() === gender.toLowerCase());
+    if (search) out = out.filter(v => v.name?.toLowerCase().includes(search.toLowerCase()));
+    return out;
   }
 
   // ElevenLabs
   if (elevenLabsCache && elevenLabsCache.expiresAt > Date.now()) {
-    return NextResponse.json({ voices: elevenLabsCache.voices });
+    return NextResponse.json({ voices: applyFilters(elevenLabsCache.voices) });
   }
 
   try {
     const client = await getElevenLabsClient();
     const response = await client.voices.getAll();
-    const voices = (response.voices ?? []).map((v) => {
+    const voices: ElevenLabsVoice[] = (response.voices ?? []).map((v) => {
       const vAny = v as unknown as Record<string, unknown>;
       return {
-        voiceId: vAny.voice_id,
-        name: vAny.name,
+        voiceId: String(vAny.voice_id ?? ""),
+        name: String(vAny.name ?? ""),
         language: (vAny.labels as Record<string, string>)?.language ?? "en",
         gender: (vAny.labels as Record<string, string>)?.gender ?? "neutral",
         accent: (vAny.labels as Record<string, string>)?.accent ?? null,
         description: (vAny.labels as Record<string, string>)?.description ?? null,
         useCase: (vAny.labels as Record<string, string>)?.use_case ?? null,
-        previewUrl: vAny.preview_url ?? null,
+        previewUrl: String(vAny.preview_url ?? "") || null,
       };
     });
 
     elevenLabsCache = { voices, expiresAt: Date.now() + 10 * 60 * 1000 };
-    return NextResponse.json({ voices });
+    return NextResponse.json({ voices: applyFilters(voices) });
   } catch {
     // ElevenLabs not configured — return static defaults
     return NextResponse.json({
