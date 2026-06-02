@@ -1,5 +1,6 @@
 import { falTextToVideo, falImageToVideo } from "../fal";
 import { getPexelsStockClip } from "../pexels";
+import { getPixabayVideoClip } from "../pixabay";
 import { generateDalleImage } from "../openai";
 import { getPricingConfig } from "../pricing";
 import type { Scene } from "@/types/storyboard";
@@ -52,6 +53,28 @@ function buildScenePrompt(params: {
 }
 
 export async function generateScene(scene: Scene, job: JobDoc): Promise<string> {
+  // ── Rule-based path: admin test or free plan ──────────────────────────────
+  const usePixabay = job.isAdminTest || job.planTier === "free";
+
+  if (usePixabay) {
+    const keywords = scene.pixabayKeywords?.length
+      ? scene.pixabayKeywords
+      : scene.visualPrompt
+          .split(",")
+          .map(s => s.trim())
+          .filter(s => s.length > 2)
+          .slice(0, 3);
+
+    return getPixabayVideoClip(
+      keywords,
+      job.id,
+      scene.index,
+      scene.voiceoverText,
+      (scene.motionStyle === "dynamic" ? "high" : "medium"),
+    );
+  }
+
+  // ── Paid path: AI-generated video ────────────────────────────────────────
   const config = await getPricingConfig();
   const qualityConfig = config.videoQualities[job.videoQuality!];
   const aspectRatio = job.aspectRatio ?? "9:16";
@@ -65,7 +88,6 @@ export async function generateScene(scene: Scene, job: JobDoc): Promise<string> 
   });
 
   try {
-    // Case 1: User uploaded a reference photo — always image-to-video, DALL-E never called
     if (job.customReferenceImageUrl) {
       return await falImageToVideo({
         model: qualityConfig.provider,
@@ -77,7 +99,6 @@ export async function generateScene(scene: Scene, job: JobDoc): Promise<string> 
       });
     }
 
-    // Case 2: Cinema without uploaded photo — DALL-E generates reference image
     if (job.videoQuality === "cinema") {
       const dallePrompt = [scene.visualPrompt, job.visualStyle]
         .filter(Boolean)
@@ -93,7 +114,6 @@ export async function generateScene(scene: Scene, job: JobDoc): Promise<string> 
       });
     }
 
-    // Case 3: Standard / Premium — text-to-video
     return await falTextToVideo({
       model: qualityConfig.provider,
       prompt: visualPrompt,

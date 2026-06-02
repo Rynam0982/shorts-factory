@@ -102,6 +102,8 @@ export async function POST(req: NextRequest) {
     const jobRef = adminDb.collection("jobs").doc();
     const jobId = jobRef.id;
 
+    const planTier: "free" | "paid" = user.plan === "free" ? "free" : "paid";
+
     await jobRef.set({
       userId,
       userPrompt: input.userPrompt,
@@ -126,6 +128,9 @@ export async function POST(req: NextRequest) {
       errorMsg: null,
       costBreakdown: null,
       isAdminTest: false,
+      planTier,
+      contentProvider: planTier === "free" ? "rule-based" : "claude",
+      simulationDebug: null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });

@@ -21,7 +21,12 @@ export async function assembleFullVideo(params: {
   let voiceoverPath: string;
   let wordTimestamps: import("../elevenlabs").WordTimestamp[] = [];
 
-  if (job.voiceProvider === "google" && process.env.GOOGLE_CLOUD_TTS_API_KEY) {
+  // Admin test jobs and free-plan jobs always use Google TTS (zero AI cost).
+  const forceGoogleTTS = job.isAdminTest || job.planTier === "free";
+  const useGoogleTTS   = (job.voiceProvider === "google" || forceGoogleTTS) &&
+                         !!process.env.GOOGLE_CLOUD_TTS_API_KEY;
+
+  if (useGoogleTTS) {
     const result = await generateVoiceoverGoogle({
       text: fullVoiceoverText,
       voiceName: job.voiceId ?? "fr-FR-Wavenet-D",
@@ -29,13 +34,22 @@ export async function assembleFullVideo(params: {
     });
     voiceoverPath = result.audioPath;
     wordTimestamps = result.wordTimestamps;
-  } else {
-    // ElevenLabs (default)
+  } else if (!forceGoogleTTS) {
+    // Paid plan: use ElevenLabs premium voices
     const voiceModel = job.videoQuality === "cinema" ? "multi" : "flash";
     const result = await generateVoiceoverWithTimestamps({
       text: fullVoiceoverText,
       voiceId: job.voiceId ?? undefined,
       model: voiceModel,
+    });
+    voiceoverPath = result.audioPath;
+    wordTimestamps = result.wordTimestamps;
+  } else {
+    // Free / admin but no Google TTS key — fall back to ElevenLabs gracefully
+    const result = await generateVoiceoverWithTimestamps({
+      text: fullVoiceoverText,
+      voiceId: job.voiceId ?? undefined,
+      model: "flash",
     });
     voiceoverPath = result.audioPath;
     wordTimestamps = result.wordTimestamps;

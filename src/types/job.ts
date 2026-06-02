@@ -1,5 +1,6 @@
 import type { Timestamp } from "firebase-admin/firestore";
 import type { Storyboard } from "./storyboard";
+import type { SimulationDebug } from "@/lib/content-intelligence/types";
 
 export type JobStatus =
   | "QUEUED"
@@ -106,6 +107,12 @@ export interface JobDoc {
   triggerRunId: string | null;
   errorMsg: string | null;
   isAdminTest: boolean;
+  /** "free" → RuleBasedContentProvider; "paid" → ClaudeContentProvider */
+  planTier: "free" | "paid" | null;
+  /** Which provider was used to generate the storyboard */
+  contentProvider: "claude" | "rule-based" | null;
+  /** Debug data produced by the RuleBasedContentProvider (null for paid jobs) */
+  simulationDebug: SimulationDebug | null;
   costBreakdown: CostBreakdown | null;
   publishResults: Record<string, PublishResult> | null;
   createdAt: Timestamp;

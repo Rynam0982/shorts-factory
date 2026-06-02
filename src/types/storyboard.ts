@@ -8,6 +8,8 @@ export const SceneSchema = z.object({
   audioPrompt: z.string().optional(),
   voiceoverText: z.string(),
   captionText: z.string().optional(),
+  /** Pixabay search terms assigned by the RuleBasedContentProvider */
+  pixabayKeywords: z.array(z.string()).optional(),
 });
 
 export const StoryboardSchema = z.object({

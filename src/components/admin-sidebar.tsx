@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Key, Settings, Share2,
-  Users, Briefcase, ArrowLeftRight, BarChart3, FlaskConical, ArrowLeft
+  Users, Briefcase, ArrowLeftRight, BarChart3, FlaskConical, ArrowLeft, Bot
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ const adminNavItems = [
   { href: "/admin/transactions", label: "Transactions",      icon: ArrowLeftRight },
   { href: "/admin/analytics",    label: "Analytics",         icon: BarChart3 },
   { href: "/admin/test-create",  label: "Créer (test)",      icon: FlaskConical },
+  { href: "/admin/simulation",   label: "Claude Simulation", icon: Bot },
 ];
 
 export default function AdminSidebar() {

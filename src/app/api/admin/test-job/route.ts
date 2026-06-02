@@ -42,7 +42,10 @@ export async function POST(req: NextRequest) {
     thumbnailUrl: null,
     errorMsg: null,
     costBreakdown: null,
-    isAdminTest: true, // ← no credit debit
+    isAdminTest: true,        // no credit debit
+    planTier: "free",         // uses RuleBasedContentProvider
+    contentProvider: "rule-based",
+    simulationDebug: null,    // filled during processing
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
