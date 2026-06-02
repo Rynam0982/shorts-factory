@@ -69,9 +69,11 @@ function formatExpiry(isoDate: string): string {
 function ConnectionsContent({
   accounts,
   configuredPlatforms,
+  missingVars = {},
 }: {
   accounts: Partial<Record<SocialPlatform, AccountInfo>>;
   configuredPlatforms: Record<SocialPlatform, boolean>;
+  missingVars?: Partial<Record<SocialPlatform, string[]>>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -197,9 +199,21 @@ function ConnectionsContent({
                         {formatExpiry(account.expiresAt)}
                       </span>
                     </div>
+                  ) : isConfigured ? (
+                    <div style={{ fontSize: 12, color: "var(--tx-3)" }}>{p.description}</div>
                   ) : (
-                    <div style={{ fontSize: 12, color: "var(--tx-3)" }}>
-                      {isConfigured ? p.description : "Non disponible — configuration admin requise"}
+                    <div style={{ fontSize: 11.5, color: "var(--tx-3)" }}>
+                      Variables manquantes dans Vercel :{" "}
+                      {(missingVars[p.id] ?? []).map((v, i) => (
+                        <span key={v}>
+                          {i > 0 && ", "}
+                          <code style={{
+                            fontFamily: "var(--font-mono)", fontSize: 10.5,
+                            background: "var(--bg-2)", padding: "1px 5px", borderRadius: 4,
+                            color: "oklch(0.66 0.2 22)",
+                          }}>{v}</code>
+                        </span>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -264,13 +278,19 @@ function ConnectionsContent({
 export default function ConnectionsClient({
   accounts,
   configuredPlatforms,
+  missingVars = {},
 }: {
   accounts: Partial<Record<SocialPlatform, AccountInfo>>;
   configuredPlatforms: Record<SocialPlatform, boolean>;
+  missingVars?: Partial<Record<SocialPlatform, string[]>>;
 }) {
   return (
     <Suspense fallback={null}>
-      <ConnectionsContent accounts={accounts} configuredPlatforms={configuredPlatforms} />
+      <ConnectionsContent
+        accounts={accounts}
+        configuredPlatforms={configuredPlatforms}
+        missingVars={missingVars}
+      />
     </Suspense>
   );
 }

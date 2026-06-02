@@ -80,7 +80,7 @@ const DEFAULT_FORM: FormState = {
   captionHighlightColor: "yellow",
   captionAutoEmoji: false,
   transitionStyle: "cut",
-  platforms: ["tiktok", "youtube"],
+  platforms: [],
 };
 
 const STEP_LABELS = [
@@ -1379,14 +1379,27 @@ function Step6Summary({
           ))}
         </div>
 
-        {/* Platforms */}
+        {/* Platforms — optionnel */}
         <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--tx-3)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Plateformes</div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--tx-3)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              Publier sur
+            </div>
+            <span style={{
+              fontSize: 10, fontFamily: "var(--font-mono)", padding: "1px 6px", borderRadius: 4,
+              background: "var(--bg-2)", color: "var(--tx-3)", border: "1px solid var(--line)",
+            }}>
+              OPTIONNEL
+            </span>
+          </div>
+          <div style={{ fontSize: 11.5, color: "var(--tx-3)", marginBottom: 10, lineHeight: 1.5 }}>
+            La vidéo est toujours sauvegardée et téléchargeable. La publication sur les réseaux est optionnelle.
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {[
               { id: "tiktok", label: "TikTok", color: "var(--tk)" },
-              { id: "youtube", label: "YouTube", color: "var(--yt)" },
-              { id: "instagram", label: "Reels", color: "var(--ig)" },
+              { id: "youtube", label: "YouTube Shorts", color: "var(--yt)" },
+              { id: "instagram", label: "Instagram Reels", color: "var(--ig)" },
             ].map(p => {
               const on = form.platforms.includes(p.id);
               return (
@@ -1398,19 +1411,35 @@ function Step6Summary({
                     onUpdate("platforms", updated);
                   }}
                   style={{
-                    padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                    padding: "7px 14px", borderRadius: 8, fontSize: 12.5, fontWeight: 600,
                     background: on ? "var(--bg-3)" : "var(--bg-1)",
-                    border: `1px solid ${on ? "var(--line-strong)" : "var(--line)"}`,
+                    border: `1.5px solid ${on ? "var(--line-strong)" : "var(--line)"}`,
                     color: on ? "var(--tx-0)" : "var(--tx-3)",
-                    display: "flex", alignItems: "center", gap: 6,
+                    display: "flex", alignItems: "center", gap: 7,
+                    transition: "all .14s", cursor: "pointer",
                   }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: on ? p.color : "var(--tx-3)" }} />
+                  <div style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: on ? p.color : "var(--tx-3)",
+                    transition: "background .14s",
+                  }} />
                   {p.label}
-                  {on && <CheckCircle size={11} style={{ color: "var(--ok)" }} />}
+                  {on && <CheckCircle size={12} style={{ color: "var(--ok)" }} />}
                 </button>
               );
             })}
           </div>
+          {form.platforms.length === 0 && (
+            <div style={{
+              marginTop: 8, display: "flex", alignItems: "center", gap: 6,
+              fontSize: 11.5, color: "var(--tx-3)",
+              padding: "7px 12px", borderRadius: 8,
+              background: "var(--bg-1)", border: "1px solid var(--line)",
+            }}>
+              <CheckCircle size={12} style={{ color: "var(--ok)" }} />
+              Vidéo sauvegardée uniquement — téléchargeable depuis l&apos;historique
+            </div>
+          )}
         </div>
       </div>
 

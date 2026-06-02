@@ -1,6 +1,9 @@
 import { adminDb } from "@/lib/firebase-admin";
 import type { SocialPlatform } from "@/types/social-account";
 
+// Always re-render so env var checks are live
+export const dynamic = "force-dynamic";
+
 interface PlatformConfig {
   id: SocialPlatform;
   label: string;
@@ -118,11 +121,11 @@ export default async function AdminPlatformsPage() {
                     display: "inline-flex", alignItems: "center", padding: "4px 12px",
                     borderRadius: 99, fontSize: 11.5, fontWeight: 600,
                     fontFamily: "var(--font-mono)",
-                    background: envOk ? "oklch(0.74 0.16 155 / 0.13)" : "var(--bg-2)",
-                    color: envOk ? "var(--ok)" : "var(--tx-3)",
-                    border: `1px solid ${envOk ? "oklch(0.74 0.16 155 / 0.3)" : "var(--line)"}`,
+                    background: envOk ? "oklch(0.74 0.16 155 / 0.13)" : "oklch(0.66 0.2 22 / 0.1)",
+                    color: envOk ? "var(--ok)" : "oklch(0.66 0.2 22)",
+                    border: `1px solid ${envOk ? "oklch(0.74 0.16 155 / 0.3)" : "oklch(0.66 0.2 22 / 0.3)"}`,
                   }}>
-                    {envOk ? "✓ App configurée" : "App non configurée"}
+                    {envOk ? "✓ Configurée" : `✗ Manque : ${p.envVars.filter(e => !process.env[e]).join(", ")}`}
                   </span>
                 </div>
               </div>
@@ -168,20 +171,35 @@ export default async function AdminPlatformsPage() {
       <div style={{
         marginTop: 24, padding: 18, borderRadius: 12,
         background: "var(--bg-1)", border: "1px solid var(--line)",
-        fontSize: 13, color: "var(--tx-2)", lineHeight: 1.6,
+        fontSize: 13, color: "var(--tx-2)", lineHeight: 1.7,
       }}>
-        <strong style={{ color: "var(--tx-0)" }}>Pour configurer :</strong> ajoute les clés dans{" "}
-        <code style={{ fontFamily: "var(--font-mono)", background: "var(--bg-2)", padding: "1px 5px", borderRadius: 4 }}>
-          .env.local
-        </code>{" "}
-        puis redémarre. Les tokens OAuth sont stockés chiffrés dans{" "}
-        <code style={{ fontFamily: "var(--font-mono)", background: "var(--bg-2)", padding: "1px 5px", borderRadius: 4 }}>
-          social_accounts
-        </code>{" "}
-        dans Firebase. Les utilisateurs connectent leurs comptes via{" "}
-        <code style={{ fontFamily: "var(--font-mono)", background: "var(--bg-2)", padding: "1px 5px", borderRadius: 4 }}>
-          /settings/connections
-        </code>.
+        <div style={{ fontWeight: 700, color: "var(--tx-0)", marginBottom: 10 }}>Variables Vercel requises :</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, fontFamily: "var(--font-mono)", fontSize: 12 }}>
+          {[
+            { label: "YouTube", vars: ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"] },
+            { label: "TikTok", vars: ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"] },
+            { label: "Instagram", vars: ["META_APP_ID", "META_APP_SECRET"] },
+            { label: "OAuth redirect", vars: ["NEXT_PUBLIC_APP_URL"] },
+          ].map(({ label, vars }) => (
+            <div key={label} style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <span style={{ color: "var(--tx-3)", minWidth: 90 }}>{label}</span>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {vars.map(v => (
+                  <code key={v} style={{
+                    background: !!process.env[v] ? "oklch(0.74 0.16 155 / 0.1)" : "oklch(0.66 0.2 22 / 0.1)",
+                    color: !!process.env[v] ? "var(--ok)" : "oklch(0.66 0.2 22)",
+                    padding: "1px 7px", borderRadius: 4, fontSize: 11,
+                  }}>
+                    {v} {!!process.env[v] ? "✓" : "✗"}
+                  </code>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 12, fontSize: 12, color: "var(--tx-3)" }}>
+          ⚠️ Après avoir ajouté les variables dans Vercel, un redéploiement est nécessaire.
+        </div>
       </div>
 
       {/* Firestore collection info */}
