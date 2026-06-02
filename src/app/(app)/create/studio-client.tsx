@@ -148,6 +148,7 @@ export default function StudioClient({ creditsBalance, isAdminTestMode, allowedQ
             captionAutoEmoji: form.captionAutoEmoji,
             transitionStyle: form.transitionStyle,
             platforms: form.platforms,
+            niche: form.niche,
             creationMode: "FULL_AUTO",
           }),
         });

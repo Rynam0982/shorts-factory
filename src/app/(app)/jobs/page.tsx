@@ -24,19 +24,25 @@ export default async function JobsPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const snap = await adminDb
-    .collection("jobs")
-    .where("userId", "==", userId)
-    .limit(50)
-    .get();
+  let jobs: Record<string, unknown>[] = [];
+  try {
+    const snap = await adminDb
+      .collection("jobs")
+      .where("userId", "==", userId)
+      .limit(50)
+      .get();
 
-  const jobs = snap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-      const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
-      const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
-      return tb - ta;
-    });
+    jobs = snap.docs
+      .map(d => ({ id: d.id, ...d.data() } as Record<string, unknown>))
+      .sort((a, b) => {
+        const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
+        const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
+        return tb - ta;
+      });
+  } catch (err) {
+    console.error("[JobsPage] Firestore error:", err);
+    // Render empty state rather than crashing the whole page
+  }
 
   return (
     <div>
@@ -47,7 +53,7 @@ export default async function JobsPage() {
         <h1 style={{ fontSize: 26 }}>Historique des vidéos</h1>
       </div>
 
-      {jobs.length === 0 ? (
+      {(jobs as Record<string, unknown>[]).length === 0 ? (
         <div className="sf-card" style={{ padding: 48, textAlign: "center" }}>
           <Film size={40} style={{ color: "var(--tx-3)", margin: "0 auto 16px" }} />
           <p style={{ color: "var(--tx-2)", fontSize: 14 }}>Aucune vidéo générée encore.</p>

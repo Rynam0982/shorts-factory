@@ -12,15 +12,18 @@ export default async function JobDetailPage({
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const jobDoc = await adminDb.collection("jobs").doc(jobId).get();
+  const [jobDoc, userDoc] = await Promise.all([
+    adminDb.collection("jobs").doc(jobId).get(),
+    adminDb.collection("users").doc(userId).get(),
+  ]);
+
   if (!jobDoc.exists) redirect("/jobs");
 
-  const job = { id: jobDoc.id, ...jobDoc.data() } as Record<string, unknown>;
+  const job  = { id: jobDoc.id, ...jobDoc.data() } as Record<string, unknown>;
+  const user = userDoc.data() ?? {};
 
   // Auth check — user must own the job or be admin
-  const userDoc = await adminDb.collection("users").doc(userId).get();
-  const user = userDoc.data()!;
-  if (job.userId !== userId && user.role !== "admin") redirect("/jobs");
+  if (job.userId !== userId && (user as Record<string, unknown>).role !== "admin") redirect("/jobs");
 
   return <JobDetailClient job={job} isAdmin={user.role === "admin"} />;
 }

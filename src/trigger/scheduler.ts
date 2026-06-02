@@ -34,47 +34,99 @@ export const checkSeriesScheduler = schedules.task({
         continue;
       }
 
-      // Create auto job
+      // Create auto job — inherit ALL settings from the series
       const jobRef = adminDb.collection("jobs").doc();
       const jobId = jobRef.id;
 
       await jobRef.set({
-        userId: series.userId,
-        userPrompt: series.topicPrompt,
-        templateId: series.templateId,
-        status: "QUEUED",
-        creationMode: "FULL_AUTO",
-        videoQuality: series.videoQuality,
-        durationSeconds: series.videoDurationSeconds,
-        useSunoMusic: series.useSunoMusic,
-        avatarId: series.avatarId,
-        platforms: series.platforms ?? [],
-        isAdminTest: false,
-        estimatedCredits: null,
-        actualCredits: null,
-        reservationTxId: null,
-        storyboard: null,
-        finalVideoUrl: null,
-        thumbnailUrl: null,
-        errorMsg: null,
-        costBreakdown: null,
-        publishResults: null,
-        triggerRunId: null,
+        userId:                 series.userId,
+        userPrompt:             series.topicPrompt,
+        templateId:             series.templateId,
+        status:                 "QUEUED",
+        creationMode:           "FULL_AUTO",
+
+        // Video
+        videoQuality:           series.videoQuality,
+        videoProviderId:        null,
+        durationSeconds:        series.videoDurationSeconds,
+        aspectRatio:            "9:16",
+        fps:                    30,
+
+        // Visual (series doesn't store these yet — sensible defaults)
+        visualStyle:            "cinematic",
+        lightingTone:           "dramatic",
+        cameraMovement:         "slow_zoom",
+        customReferenceImageUrl: null,
+
+        // Audio — from series settings
+        voiceProvider:          "elevenlabs",
+        voiceId:                series.voiceId ?? "21m00Tcm4TlvDq8ikWAM",
+        voiceLanguage:          "fr-FR",
+        musicMood:              "epic",
+        musicUrl:               null,
+        sfxIntensity:           "normal",
+        audioVoiceBalance:      80,
+        audioMusicBalance:      20,
+
+        // Captions — from series settings
+        captionStyle:           series.captionStyle ?? "bold_center",
+        captionFontFamily:      "Arial Black",
+        captionFontSize:        "medium",
+        captionPosition:        "bottom",
+        captionHighlightColor:  "yellow",
+        captionAutoEmoji:       false,
+
+        // Transitions
+        transitionStyle:        "cut",
+
+        // Misc
+        platforms:              series.platforms ?? [],
+        useSunoMusic:           series.useSunoMusic,
+        avatarId:               series.avatarId ?? null,
+        sceneOverrides:         null,
+        customAudioUrl:         null,
+        storyboard:             null,
+
+        // Credits
+        estimatedCredits:       null,
+        actualCredits:          null,
+        reservationTxId:        null,
+        triggerRunId:           null,
+        finalVideoUrl:          null,
+        thumbnailUrl:           null,
+        errorMsg:               null,
+        costBreakdown:          null,
+        publishResults:         null,
+
+        // Flags
+        isAdminTest:            false,
+        planTier:               "paid",
+        contentProvider:        "claude",
+        simulationDebug:        null,
+
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
 
       // Trigger generation
-      const handle = await generateVideoTask.trigger({ jobId });
-
-      await jobRef.update({ triggerRunId: handle.id, updatedAt: FieldValue.serverTimestamp() });
+      try {
+        const handle = await generateVideoTask.trigger({ jobId });
+        await jobRef.update({ triggerRunId: handle.id, updatedAt: FieldValue.serverTimestamp() });
+      } catch (err) {
+        console.error(`[scheduler] Trigger.dev error for series ${series.id}:`, err);
+        await jobRef.update({
+          status: "FAILED",
+          errorMsg: "Impossible de démarrer le job (Trigger.dev)",
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
 
       // Update series next run
       await adminDb.collection("series").doc(series.id).update({
-        lastRunAt: FieldValue.serverTimestamp(),
-        nextRunAt: computeNextRun(series, now),
+        lastRunAt:            FieldValue.serverTimestamp(),
+        nextRunAt:            computeNextRun(series, now),
         totalVideosGenerated: FieldValue.increment(1),
-        updatedAt: FieldValue.serverTimestamp(),
+        updatedAt:            FieldValue.serverTimestamp(),
       });
     }
   },
@@ -82,12 +134,20 @@ export const checkSeriesScheduler = schedules.task({
 
 function computeNextRun(series: SeriesDoc, fromDate: Date): Timestamp {
   const freqDays: Record<string, number> = {
-    daily: 1,
-    twice_weekly: 3.5,
-    three_weekly: 2.33,
-    weekly: 7,
+    daily:         1,
+    twice_weekly:  3.5,
+    three_weekly:  2.33,
+    weekly:        7,
   };
   const days = freqDays[series.frequency] ?? 7;
+
+  // Parse timeOfDay safely
+  const [hourStr, minStr] = (series.timeOfDay ?? "18:00").split(":");
+  const hour   = Math.max(0, Math.min(23, parseInt(hourStr ?? "18", 10) || 18));
+  const minute = Math.max(0, Math.min(59, parseInt(minStr  ?? "0",  10) || 0));
+
   const next = new Date(fromDate.getTime() + days * 24 * 60 * 60 * 1000);
+  next.setUTCHours(hour, minute, 0, 0);
+
   return Timestamp.fromDate(next);
 }

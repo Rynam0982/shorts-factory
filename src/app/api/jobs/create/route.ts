@@ -8,18 +8,38 @@ import { generateVideoTask } from "@/trigger/generate-video";
 import { z } from "zod";
 
 const CreateJobSchema = z.object({
-  userPrompt: z.string().min(3).max(2000),
-  templateId: z.string().optional().default("free"),
-  videoQuality: z.enum(["standard", "premium", "cinema"]).default("standard"),
-  durationSeconds: z.number().min(10).max(120).default(30),
-  captionStyle: z.enum(["wordbyword", "karaoke", "bold_center", "boxed", "minimal"]).default("bold_center"),
-  platforms: z.array(z.enum(["youtube", "tiktok", "instagram"])).default([]),
-  useSunoMusic: z.boolean().default(false),
-  creationMode: z.enum(["FULL_AUTO", "MANUAL_SCRIPT", "IMPORT_CLIP", "UPLOAD_PUBLISH"]).default("FULL_AUTO"),
-  storyboard: z.any().optional(),
-  sceneOverrides: z.any().optional(),
-  customAudioUrl: z.string().optional(),
-  avatarId: z.string().optional(),
+  userPrompt:             z.string().min(3).max(2000),
+  templateId:             z.string().optional().default("free"),
+  niche:                  z.string().optional().default("general"),
+  videoQuality:           z.enum(["standard", "premium", "cinema"]).default("standard"),
+  durationSeconds:        z.number().min(10).max(120).default(30),
+  aspectRatio:            z.enum(["9:16","16:9","1:1","4:3","3:4","2:3"]).optional().default("9:16"),
+  fps:                    z.union([z.literal(24), z.literal(30), z.literal(60)]).optional().default(30),
+  visualStyle:            z.string().optional().default("cinematic"),
+  lightingTone:           z.string().optional().default("dramatic"),
+  cameraMovement:         z.string().optional().default("slow_zoom"),
+  customReferenceImageUrl: z.string().nullable().optional(),
+  voiceProvider:          z.enum(["elevenlabs","google"]).optional().default("elevenlabs"),
+  voiceId:                z.string().optional(),
+  voiceLanguage:          z.string().optional().default("fr-FR"),
+  musicMood:              z.string().optional().default("epic"),
+  sfxIntensity:           z.enum(["none","subtle","normal","intense"]).optional().default("normal"),
+  audioVoiceBalance:      z.number().min(0).max(100).optional().default(80),
+  audioMusicBalance:      z.number().min(0).max(100).optional().default(20),
+  captionStyle:           z.enum(["wordbyword","karaoke","bold_center","boxed","minimal","none"]).default("bold_center"),
+  captionFontFamily:      z.string().optional().default("Arial Black"),
+  captionFontSize:        z.enum(["small","medium","large"]).optional().default("medium"),
+  captionPosition:        z.enum(["top","center","bottom"]).optional().default("bottom"),
+  captionHighlightColor:  z.string().optional().default("yellow"),
+  captionAutoEmoji:       z.boolean().optional().default(false),
+  transitionStyle:        z.enum(["cut","fade","zoom","slide","flash"]).optional().default("cut"),
+  platforms:              z.array(z.enum(["youtube","tiktok","instagram"])).default([]),
+  useSunoMusic:           z.boolean().default(false),
+  creationMode:           z.enum(["FULL_AUTO","MANUAL_SCRIPT","IMPORT_CLIP","UPLOAD_PUBLISH"]).default("FULL_AUTO"),
+  storyboard:             z.any().optional(),
+  sceneOverrides:         z.any().optional(),
+  customAudioUrl:         z.string().optional(),
+  avatarId:               z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -60,6 +80,27 @@ export async function POST(req: NextRequest) {
         { error: `Quality "${input.videoQuality}" not available on your plan` },
         { status: 403 }
       );
+    }
+
+    // Enforce daily job limit (skip for admin test mode)
+    if (!user.isAdminTestMode && dailyJobsLimit > 0) {
+      try {
+        const startOfDay = new Date();
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const { Timestamp } = await import("firebase-admin/firestore");
+        const todayCount = await adminDb
+          .collection("jobs")
+          .where("userId", "==", userId)
+          .where("createdAt", ">=", Timestamp.fromDate(startOfDay))
+          .count()
+          .get();
+        if (todayCount.data().count >= dailyJobsLimit) {
+          return NextResponse.json(
+            { error: `Limite journalière atteinte (${dailyJobsLimit} vidéo${dailyJobsLimit > 1 ? "s" : ""}/jour sur votre plan)` },
+            { status: 429 }
+          );
+        }
+      } catch { /* skip on error — non-blocking */ }
     }
 
     // Estimate credits
@@ -106,31 +147,69 @@ export async function POST(req: NextRequest) {
 
     await jobRef.set({
       userId,
-      userPrompt: input.userPrompt,
-      templateId: input.templateId,
-      status: "QUEUED",
-      creationMode: input.creationMode,
-      videoQuality: input.videoQuality,
-      durationSeconds: input.durationSeconds,
-      captionStyle: input.captionStyle,
-      platforms: input.platforms,
-      storyboard: input.storyboard ?? null,
-      sceneOverrides: input.sceneOverrides ?? null,
-      customAudioUrl: input.customAudioUrl ?? null,
-      useSunoMusic: input.useSunoMusic,
-      avatarId: input.avatarId ?? null,
+      userPrompt:             input.userPrompt,
+      templateId:             input.templateId,
+      niche:                  input.niche,
+      status:                 "QUEUED",
+      creationMode:           input.creationMode,
+
+      // Video
+      videoQuality:           input.videoQuality,
+      videoProviderId:        null,
+      durationSeconds:        input.durationSeconds,
+      aspectRatio:            input.aspectRatio,
+      fps:                    input.fps,
+
+      // Visual
+      visualStyle:            input.visualStyle,
+      lightingTone:           input.lightingTone,
+      cameraMovement:         input.cameraMovement,
+      customReferenceImageUrl: input.customReferenceImageUrl ?? null,
+
+      // Audio
+      voiceProvider:          input.voiceProvider,
+      voiceId:                input.voiceId ?? "21m00Tcm4TlvDq8ikWAM",
+      voiceLanguage:          input.voiceLanguage,
+      musicMood:              input.musicMood,
+      musicUrl:               null,
+      sfxIntensity:           input.sfxIntensity,
+      audioVoiceBalance:      input.audioVoiceBalance,
+      audioMusicBalance:      input.audioMusicBalance,
+
+      // Captions
+      captionStyle:           input.captionStyle,
+      captionFontFamily:      input.captionFontFamily,
+      captionFontSize:        input.captionFontSize,
+      captionPosition:        input.captionPosition,
+      captionHighlightColor:  input.captionHighlightColor,
+      captionAutoEmoji:       input.captionAutoEmoji,
+
+      // Transitions / misc
+      transitionStyle:        input.transitionStyle,
+      platforms:              input.platforms,
+      storyboard:             input.storyboard ?? null,
+      sceneOverrides:         input.sceneOverrides ?? null,
+      customAudioUrl:         input.customAudioUrl ?? null,
+      useSunoMusic:           input.useSunoMusic,
+      avatarId:               input.avatarId ?? null,
+
+      // Credits
       estimatedCredits,
-      actualCredits: null,
+      actualCredits:          null,
       reservationTxId,
-      triggerRunId: null,
-      finalVideoUrl: null,
-      thumbnailUrl: null,
-      errorMsg: null,
-      costBreakdown: null,
-      isAdminTest: false,
+      triggerRunId:           null,
+      finalVideoUrl:          null,
+      thumbnailUrl:           null,
+      errorMsg:               null,
+      costBreakdown:          null,
+      publishResults:         null,
+
+      // Flags
+      isAdminTest:            false,
       planTier,
-      contentProvider: planTier === "free" ? "rule-based" : "claude",
-      simulationDebug: null,
+      contentProvider:        planTier === "free" ? "rule-based" : "claude",
+      simulationDebug:        null,
+
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });

@@ -13,6 +13,17 @@ export async function GET(
 
   const { id: jobId } = await params;
 
+  // Ownership check — every user can only stream their own jobs
+  const ownerDoc = await adminDb.collection("jobs").doc(jobId).get();
+  if (ownerDoc.exists) {
+    const ownerData = ownerDoc.data()!;
+    const userDoc = await adminDb.collection("users").doc(userId).get();
+    const isAdmin = userDoc.data()?.role === "admin";
+    if (ownerData.userId !== userId && !isAdmin) {
+      return new Response("Forbidden", { status: 403 });
+    }
+  }
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {

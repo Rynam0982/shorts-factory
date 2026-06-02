@@ -285,6 +285,43 @@ function fmtTime(seconds: number): string {
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(cs).padStart(2, "0")}`;
 }
 
+/** Mix an SFX file into a voiceover at the given volume. Returns the mixed path or null on failure. */
+export async function mixSFXIntoAudio(
+  voicePath: string,
+  sfxPath: string,
+  sfxVolume: number,
+): Promise<string | null> {
+  if (!fs.existsSync(sfxPath) || fs.statSync(sfxPath).size < 100) return null;
+
+  const mixedPath = path.join(os.tmpdir(), `sfx_mix_${Date.now()}.mp3`);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg()
+        .input(voicePath)
+        .input(sfxPath)
+        .complexFilter([
+          `[0:a]volume=1.0[voice]`,
+          `[1:a]volume=${sfxVolume.toFixed(2)}[sfx]`,
+          "[voice][sfx]amix=inputs=2:duration=longest[audio]",
+        ])
+        .map("[audio]")
+        .audioCodec("libmp3lame")
+        .outputOptions(["-b:a 192k"])
+        .output(mixedPath)
+        .on("end", () => resolve())
+        .on("error", reject)
+        .run();
+    });
+    if (fs.existsSync(mixedPath) && fs.statSync(mixedPath).size > 100) return mixedPath;
+    return null;
+  } catch {
+    try { if (fs.existsSync(mixedPath)) fs.unlinkSync(mixedPath); } catch {}
+    return null;
+  } finally {
+    try { fs.unlinkSync(sfxPath); } catch {}
+  }
+}
+
 export async function extractBestFrame(videoPath: string): Promise<string> {
   const outputPath = path.join(os.tmpdir(), `thumb_${Date.now()}.jpg`);
   await new Promise<void>((resolve, reject) => {

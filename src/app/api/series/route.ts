@@ -62,10 +62,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const input = CreateSeriesSchema.parse(body);
 
-    // Compute first nextRunAt
+    // Compute first nextRunAt — safe parsing
+    const [hourStr, minStr] = input.timeOfDay.split(":");
+    const hour   = Math.max(0, Math.min(23, parseInt(hourStr ?? "18", 10) || 18));
+    const minute = Math.max(0, Math.min(59, parseInt(minStr  ?? "0",  10) || 0));
     const nextRun = new Date();
     nextRun.setDate(nextRun.getDate() + 1);
-    nextRun.setHours(parseInt(input.timeOfDay.split(":")[0]), parseInt(input.timeOfDay.split(":")[1]), 0, 0);
+    nextRun.setUTCHours(hour, minute, 0, 0);
 
     const ref = adminDb.collection("series").doc();
     await ref.set({

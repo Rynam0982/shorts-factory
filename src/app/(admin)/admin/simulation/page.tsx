@@ -238,15 +238,26 @@ export default async function SimulationPage({
 }) {
   const { job: selectedJobId } = await searchParams;
 
-  // Fetch recent simulation jobs (admin test or free plan)
-  const snap = await adminDb
-    .collection("jobs")
-    .where("isAdminTest", "==", true)
-    .orderBy("createdAt", "desc")
-    .limit(20)
-    .get();
+  // Fetch recent simulation jobs (no orderBy = no composite index required)
+  let jobs: Record<string, unknown>[] = [];
+  try {
+    const snap = await adminDb
+      .collection("jobs")
+      .where("isAdminTest", "==", true)
+      .limit(30)
+      .get();
 
-  const jobs = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Record<string, unknown>[];
+    jobs = snap.docs
+      .map(d => ({ id: d.id, ...d.data() } as Record<string, unknown>))
+      .sort((a, b) => {
+        const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
+        const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
+        return tb - ta;
+      })
+      .slice(0, 20);
+  } catch (err) {
+    console.error("[SimulationPage] Firestore error:", err);
+  }
 
   // Fetch selected job detail
   let selectedJob: Record<string, unknown> | null = null;

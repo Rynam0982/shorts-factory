@@ -1,11 +1,7 @@
-import { assembleVideo as ffmpegAssemble, extractBestFrame } from "../ffmpeg";
+import { assembleVideo as ffmpegAssemble, extractBestFrame, mixSFXIntoAudio } from "../ffmpeg";
 import { generateVoiceoverWithTimestamps, generateVoiceoverGoogle } from "../elevenlabs";
 import { getPixabayTrack, getPixabaySFX } from "../pixabay";
 import { uploadToR2 } from "../r2";
-import fs from "fs";
-import path from "path";
-import os from "os";
-import ffmpegStatic from "fluent-ffmpeg";
 import type { Storyboard } from "@/types/storyboard";
 import type { JobDoc } from "@/types/job";
 
@@ -65,46 +61,17 @@ export async function assembleFullVideo(params: {
   let sfxMixedVoicePath = voiceoverPath;
   const sfxIntensity = job.sfxIntensity ?? "none";
 
-  if (sfxIntensity !== "none" && wordTimestamps.length > 0) {
+  if (sfxIntensity !== "none") {
     try {
-      const sfxVolMap: Record<string, number> = {
-        subtle: 0.10,
-        normal: 0.20,
-        intense: 0.35,
-      };
+      const sfxVolMap: Record<string, number> = { subtle: 0.10, normal: 0.20, intense: 0.35 };
       const sfxVol = sfxVolMap[sfxIntensity] ?? 0.20;
-
-      // Download a whoosh transition SFX and mix it with the voiceover
       const sfxPath = await getPixabaySFX("transition");
-      if (sfxPath && fs.existsSync(sfxPath) && fs.statSync(sfxPath).size > 100) {
-        const mixedPath = path.join(os.tmpdir(), `voice_sfx_${Date.now()}.mp3`);
-        await new Promise<void>((resolve, reject) => {
-          ffmpegStatic()
-            .input(voiceoverPath)
-            .input(sfxPath)
-            .complexFilter([
-              `[0:a]volume=1.0[voice]`,
-              `[1:a]volume=${sfxVol}[sfx]`,
-              "[voice][sfx]amix=inputs=2:duration=longest[audio]",
-            ])
-            .map("[audio]")
-            .audioCodec("libmp3lame")
-            .outputOptions(["-b:a 192k"])
-            .output(mixedPath)
-            .on("end", () => resolve())
-            .on("error", (err) => {
-              console.warn("SFX mix failed (non-fatal):", err.message);
-              resolve(); // non-blocking
-            })
-            .run();
-        });
-        if (fs.existsSync(mixedPath) && fs.statSync(mixedPath).size > 100) {
-          sfxMixedVoicePath = mixedPath;
-        }
-        try { fs.unlinkSync(sfxPath); } catch {}
+      if (sfxPath) {
+        const mixed = await mixSFXIntoAudio(voiceoverPath, sfxPath, sfxVol);
+        if (mixed) sfxMixedVoicePath = mixed;
       }
     } catch (sfxErr) {
-      console.warn("SFX step failed (non-fatal):", sfxErr instanceof Error ? sfxErr.message : sfxErr);
+      console.warn("SFX step skipped:", sfxErr instanceof Error ? sfxErr.message : sfxErr);
     }
   }
 
