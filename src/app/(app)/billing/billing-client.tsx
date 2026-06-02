@@ -47,9 +47,13 @@ export default function BillingClient({ user, stripeConfigured = true }: { user:
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan: planId }),
       });
-      const data = await res.json();
+      let data: { url?: string; error?: string } = {};
+      try { data = await res.json(); } catch {}
+      if (!res.ok) { toast.error(data.error ?? `Erreur serveur (${res.status})`); return; }
       if (data.url) window.location.href = data.url;
-      else toast.error("Erreur lors du checkout");
+      else toast.error("Erreur lors du checkout — URL manquante");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur réseau");
     } finally {
       setLoading(null);
     }
@@ -59,9 +63,13 @@ export default function BillingClient({ user, stripeConfigured = true }: { user:
     setLoading("portal");
     try {
       const res = await fetch("/api/billing/portal", { method: "POST" });
-      const data = await res.json();
+      let data: { url?: string; error?: string } = {};
+      try { data = await res.json(); } catch {}
+      if (!res.ok) { toast.error(data.error ?? `Erreur portail (${res.status})`); return; }
       if (data.url) window.open(data.url, "_blank");
-      else toast.error("Erreur portail Stripe");
+      else toast.error("Erreur portail Stripe — URL manquante");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur réseau");
     } finally {
       setLoading(null);
     }

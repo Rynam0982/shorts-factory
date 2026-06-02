@@ -9,6 +9,7 @@ export default async function BillingPage() {
   if (!userId) redirect("/sign-in");
 
   const userDoc = await adminDb.collection("users").doc(userId).get();
+  if (!userDoc.exists) redirect("/sign-in");
   const user = userDoc.data()!;
 
   return <BillingClient user={user} stripeConfigured={isStripeConfigured()} />;

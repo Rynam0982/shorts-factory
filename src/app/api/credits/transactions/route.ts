@@ -5,7 +5,7 @@ import { adminDb } from "@/lib/firebase-admin";
 export async function GET(req: NextRequest) {
   try {
     const { clerkUserId } = await requireUser();
-    const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "20");
+    const limit = Math.max(1, parseInt(req.nextUrl.searchParams.get("limit") ?? "20", 10) || 20);
 
     const snap = await adminDb
       .collection("credit_transactions")

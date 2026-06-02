@@ -19,31 +19,36 @@ export default async function DashboardPage() {
   if (!userId) redirect("/sign-in");
 
   const userDoc = await adminDb.collection("users").doc(userId).get();
+  if (!userDoc.exists) redirect("/sign-in");
   const user = userDoc.data()!;
 
-  const recentSnap = await adminDb
-    .collection("jobs")
-    .where("userId", "==", userId)
-    .limit(20)
-    .get();
+  let recentJobs: Record<string, unknown>[] = [];
+  try {
+    const recentSnap = await adminDb
+      .collection("jobs")
+      .where("userId", "==", userId)
+      .limit(20)
+      .get();
+    recentJobs = recentSnap.docs
+      .map(d => ({ id: d.id, ...d.data() } as Record<string, unknown>))
+      .sort((a, b) => {
+        const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
+        const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
+        return tb - ta;
+      })
+      .slice(0, 4);
+  } catch {}
 
-  const recentJobs = recentSnap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-      const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
-      const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
-      return tb - ta;
-    })
-    .slice(0, 4);
-
-  const seriesSnap = await adminDb
-    .collection("series")
-    .where("userId", "==", userId)
-    .where("isActive", "==", true)
-    .limit(3)
-    .get();
-
-  const activeSeries = seriesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let activeSeries: Record<string, unknown>[] = [];
+  try {
+    const seriesSnap = await adminDb
+      .collection("series")
+      .where("userId", "==", userId)
+      .where("isActive", "==", true)
+      .limit(3)
+      .get();
+    activeSeries = seriesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Record<string, unknown>));
+  } catch {}
 
   const firstName = user.name?.split(" ")[0] ?? null;
   const balance: number = user.creditsBalance ?? 0;

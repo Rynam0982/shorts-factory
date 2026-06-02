@@ -39,9 +39,10 @@ async function refreshOne(account: SocialAccountDoc): Promise<void> {
 }
 
 export async function GET(req: NextRequest) {
-  // Vercel automatically sends Authorization: Bearer <CRON_SECRET>
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader  = req.headers.get("authorization");
+  // Reject if secret not configured or header doesn't match
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

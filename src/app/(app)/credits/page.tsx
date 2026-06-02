@@ -11,17 +11,28 @@ export default async function CreditsPage() {
   if (!userId) redirect("/sign-in");
 
   const userDoc = await adminDb.collection("users").doc(userId).get();
+  if (!userDoc.exists) redirect("/sign-in");
   const user = userDoc.data()!;
 
-  const txSnap = await adminDb
-    .collection("credit_transactions")
-    .where("userId", "==", userId)
-    .limit(20)
-    .get();
+  let txSnap;
+  try {
+    txSnap = await adminDb
+      .collection("credit_transactions")
+      .where("userId", "==", userId)
+      .limit(20)
+      .get();
+  } catch {
+    txSnap = null;
+  }
 
-  const transactions = txSnap.docs
-    .map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() ?? null }))
-    .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+  const transactions = (txSnap?.docs ?? [])
+    .map((d) => {
+      try {
+        return { id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() ?? null };
+      } catch { return null; }
+    })
+    .filter(Boolean)
+    .sort((a, b) => ((b!.createdAt as string) ?? "").localeCompare((a!.createdAt as string) ?? ""));
 
   const TYPE_LABELS: Record<string, string> = {
     PURCHASE: "Achat",

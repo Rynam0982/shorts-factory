@@ -53,14 +53,14 @@ export default async function JobsPage() {
         <h1 style={{ fontSize: 26 }}>Historique des vidéos</h1>
       </div>
 
-      {(jobs as Record<string, unknown>[]).length === 0 ? (
+      {jobs.length === 0 ? (
         <div className="sf-card" style={{ padding: 48, textAlign: "center" }}>
           <Film size={40} style={{ color: "var(--tx-3)", margin: "0 auto 16px" }} />
           <p style={{ color: "var(--tx-2)", fontSize: 14 }}>Aucune vidéo générée encore.</p>
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 18 }}>
-          {(jobs as Record<string, unknown>[]).map(job => {
+          {jobs.map(job => {
             const st = STATUS_STYLES[(job.status as string) ?? "QUEUED"] ?? STATUS_STYLES.QUEUED;
             const qt = QUALITY_STYLES[(job.videoQuality as string) ?? "standard"] ?? QUALITY_STYLES.standard;
             return (
