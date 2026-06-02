@@ -151,12 +151,16 @@ export default function StudioClient({ creditsBalance, isAdminTestMode, allowedQ
             creationMode: "FULL_AUTO",
           }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Erreur");
+
+        // Parse response before checking status — server may return 5xx with no body
+        let data: { jobId?: string; error?: string } = {};
+        try { data = await res.json(); } catch { /* empty body */ }
+
+        if (!res.ok) throw new Error(data.error ?? `Erreur serveur (${res.status})`);
         toast.success("Job créé ! Génération en cours…");
         router.push(`/jobs/${data.jobId}`);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Erreur");
+        toast.error(err instanceof Error ? err.message : "Erreur inconnue");
       }
     });
   }
@@ -233,6 +237,7 @@ export default function StudioClient({ creditsBalance, isAdminTestMode, allowedQ
               isPending={isPending}
               onLaunch={handleSubmit}
               onEdit={setStep}
+              onUpdate={upd}
             />
           )}
         </div>
@@ -784,22 +789,30 @@ function Step4Audio({ form, upd }: { form: FormState; upd: <K extends keyof Form
       setPlayingMusicMood(null);
       return;
     }
-    if (musicAudioRef.current) musicAudioRef.current.pause();
+    if (musicAudioRef.current) { musicAudioRef.current.pause(); musicAudioRef.current = null; }
     setLoadingMusic(mood);
     const idx = index ?? (musicTrackIndex[mood] ?? 0);
     try {
+      // Fetch metadata (total track count, title) — separate from stream
       const params = new URLSearchParams({ mood, index: String(idx) });
       if (musicSearch) params.set("search", musicSearch);
       const res = await fetch(`/api/music/preview?${params}`);
-      const d = await res.json();
-      if (d.url) {
-        const audio = new Audio(d.url);
-        musicAudioRef.current = audio;
-        audio.play();
-        setPlayingMusicMood(mood);
+      if (res.ok) {
+        const d = await res.json();
         setMusicTotals(prev => ({ ...prev, [mood]: d.total ?? 1 }));
-        audio.onended = () => setPlayingMusicMood(null);
       }
+
+      // Stream audio through our proxy to avoid CORS issues
+      const streamParams = new URLSearchParams({ mood, index: String(idx) });
+      if (musicSearch) streamParams.set("search", musicSearch);
+      const audio = new Audio(`/api/music/stream?${streamParams}`);
+      musicAudioRef.current = audio;
+      audio.onended = () => setPlayingMusicMood(null);
+      audio.onerror = () => { setPlayingMusicMood(null); setLoadingMusic(null); };
+      await audio.play();
+      setPlayingMusicMood(mood);
+    } catch {
+      setPlayingMusicMood(null);
     } finally {
       setLoadingMusic(null);
     }
@@ -1288,7 +1301,7 @@ function Step5Production({
 // ═══════════════════════════════════════════════════════════════════
 function Step6Summary({
   form, creditsBalance, estimatedCredits, onEstimate,
-  isAdminTestMode, isPending, onLaunch, onEdit,
+  isAdminTestMode, isPending, onLaunch, onEdit, onUpdate,
 }: {
   form: FormState;
   creditsBalance: number;
@@ -1298,6 +1311,7 @@ function Step6Summary({
   isPending: boolean;
   onLaunch: () => void;
   onEdit: (step: number) => void;
+  onUpdate: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
 }) {
   const [localEstimate, setLocalEstimate] = useState<{ totalCredits: number; breakdown: Record<string, number> } | null>(null);
 
@@ -1377,8 +1391,10 @@ function Step6Summary({
               return (
                 <button key={p.id} type="button"
                   onClick={() => {
-                    const updated = on ? form.platforms.filter(x => x !== p.id) : [...form.platforms, p.id];
-                    // Can't call upd here directly, so we use event dispatch
+                    const updated = on
+                      ? form.platforms.filter(x => x !== p.id)
+                      : [...form.platforms, p.id];
+                    onUpdate("platforms", updated);
                   }}
                   style={{
                     padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,

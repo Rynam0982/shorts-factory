@@ -1,8 +1,9 @@
 import { getOpenAIClient } from "./api-clients";
-import fs from "fs";
-import path from "path";
-import os from "os";
 
+/**
+ * Generates an image with DALL-E 3 and returns the temporary CDN URL directly.
+ * The URL expires after ~1h (OpenAI policy), which is fine for same-pipeline use.
+ */
 export async function generateDalleImage(prompt: string): Promise<string> {
   const client = await getOpenAIClient();
 
@@ -17,11 +18,7 @@ export async function generateDalleImage(prompt: string): Promise<string> {
   const url = response.data?.[0]?.url;
   if (!url) throw new Error("DALL-E returned no image URL");
 
-  // Download and cache locally
-  const imgResp = await fetch(url);
-  const buffer = Buffer.from(await imgResp.arrayBuffer());
-  const tmpFile = path.join(os.tmpdir(), `dalle_${Date.now()}.png`);
-  fs.writeFileSync(tmpFile, buffer);
-
-  return tmpFile;
+  // Return the URL directly — Fal.ai accepts remote URLs.
+  // No local download needed and no temp file to clean up.
+  return url;
 }

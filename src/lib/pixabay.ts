@@ -85,16 +85,6 @@ function generateSilenceFile(): string {
   return tmpFile;
 }
 
-// ── Visual preview (already in pexels.ts, re-export for convenience) ──────────
-export async function getVisualPreview(
-  subject: string,
-  style: string
-): Promise<{ url: string; thumbnail: string; type: "photo" | "video" }[]> {
-  // Delegated to /api/visual-preview route which handles this
-  // This function is here for potential server-side pipeline use
-  return [];
-}
-
 // ── Pixabay video search (for RuleBasedContentProvider / free plan) ───────────
 
 interface PixabayVideoVariant {

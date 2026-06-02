@@ -122,7 +122,8 @@ export async function generateScene(scene: Scene, job: JobDoc): Promise<string> 
       fps,
     });
   } catch (primaryError) {
-    console.warn(`Provider ${qualityConfig.provider} failed, trying fallback ${qualityConfig.fallback}`);
+    console.warn(`Provider ${qualityConfig.provider} failed:`, primaryError instanceof Error ? primaryError.message : primaryError);
+    console.warn(`Trying fallback provider ${qualityConfig.fallback}…`);
     try {
       return await falTextToVideo({
         model: qualityConfig.fallback,
